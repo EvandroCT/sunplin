@@ -1,0 +1,54 @@
+.\" Copyright Welton Cardoso, 2013
+.\"
+.\" This file may be copied under the conditions described
+.\" in the GNU GENERAL PUBLIC LICENSE, Version 2, June 1991
+.\" that should have been distributed together with this file.
+.\"
+.TH SUNPLIN 1 "JUNE 2013" Linux
+.SH NAME
+sunplin \- Simulation with UNcertainty for PhyLogenetic INvestigations
+.SH SYNOPSIS
+.BI "sunplin"
+( expd <f1> <f2> <n> <m> | dist <f3> ) [-l <f4>]
+.SH DESCRIPTION
+.B sunplin
+(1) randomly expand a tree (expd) OR (2) calculates its patristic distance matrix (dist).
+
+To expand a tree, a newick formatted tree (f1) and the species to be inserted (f2 - plain text) must be provided. In addition, the number of trees to generate (n) and the expansion
+method (m - (1) over the nodes, (2) over the branch lengths) is required.
+
+To calculate the patristic distance matrix, a newick formatted tree (f3) must be
+provided. If a nexus formatted file (containing several trees) is used all corresponding
+patristic distance matrices are calculated.
+
+In both cases, the output file name can be specified (f4). If omitted, default names are used.
+
+.SH EXAMPLES
+.B sunplin expd sample.tree species.txt 1000 1
+
+expand the sample.tree provided by inserting the species specified in species.txt. The
+process is repeated 1000 times, using the over the nodes method, and the resulting trees
+are stored in a nexus formatted file named sample-expd.nex
+
+.B sunplin expd sample.tree species.txt 100 2 -l expanded-trees
+
+expand the sample.tree provided by inserting the species specified in species.txt. The
+process is repeated 100 times, using the over the branch lengths method, and the resulting 
+trees are stored in a file named expanded-trees.nex
+
+.B sunplin dist sample.tree
+
+calculate the patristic distance matrix of the sample.tree provided. The resulting matrix is stored in a file named sample-dist.txt
+
+.B sunplin dist sample.nex -l dist-matrices
+
+calculate the patristic distance matrices of all trees provided in sample.nex. The resulting matrices are stored in a file named dist-matrices.txt
+
+.SH COPYRIGHT
+Copyright (C) 2013 by Welton Cardoso
+
+This file may be copied under the conditions described in the GNU GENERAL
+PUBLIC LICENSE, Version 2, June 1991 that should have been distributed
+together with this file.
+.SH AUTHOR
+Welton Cardoso
