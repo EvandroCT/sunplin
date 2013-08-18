@@ -5,111 +5,15 @@ This package should contain the following files:
 
 README						this file
 COPYING						the license terms for the files in this package
+UserManual.pdf				sunplin user manual
 sunplin.cpp					standalone version source code
-sunplin.1					man page
 sunplin-r.cpp				r-package version source code
-sample.tree					sample tree in newick format
-species.txt					species to be inserted in plain text format
-STAL/(OS)/sunplin(.exe)		standalone binares for different Operating Systems
-R/(OS)/sunplin-r.so(dll)	r-package libraries for different Operating Systems
+sunplin-functions.r			R script to import data from the site
+Hum_146_spp.tree			sample tree in newick format
+Hum_158_spp.puts			sample PUT file
 
 Copyright (C) 2013 by Welton Cardoso
 
 All files in this package may be modified and/or distributed according to
 the GNU GPL, version 2, June 1991, that should have been distributed with
 this package.
-
-======
-(RE)BUILD binaries: Standalone version
-
-> g++ sunplin.cpp -o sunplin
-
---
-
-(RE)BUILD binaries: R version
-
-> R CMD SHLIB sunplin-r.cpp
-
-======
-USAGE: Standalone version
-
-NAME
-       sunplin - Simulation with UNcertainty for PhyLogenetic INvestigations
-
-SYNOPSIS
-       sunplin ( expd <f1> <f2> <n> <m> | dist <f3> ) [-l <f4>]
-
-DESCRIPTION
-       sunplin (1) randomly expand a tree (expd) OR (2) calculates its patris-
-       tic distance matrix (dist).
-
-       To expand a tree, a newick formatted tree (f1) and the  species  to  be
-       inserted (f2 - plain text) must be provided. In addition, the number of
-       trees to generate (n) and the expansion method (m - (1) over the nodes,
-       (2) over the branch lengths) is required.
-
-       To  calculate  the  patristic  distance matrix, a newick formatted tree
-       (f3) must be provided. If a nexus formatted  file  (containing  several
-       trees) is used all corresponding patristic distance matrices are calcu-
-       lated.
-
-       In both cases, the output file name can be specified (f4). If  omitted,
-       default names are used.
-
-EXAMPLES
-       sunplin expd sample.tree species.txt 1000 1
-
-       expand  the  sample.tree provided by inserting the species specified in
-       species.txt. The process is repeated 1000 times,  using  the  over  the
-       nodes  method,  and the resulting trees are stored in a nexus formatted
-       file named sample-expd.nex
-
-       sunplin expd sample.tree species.txt 100 2 -l expanded-trees
-
-       expand the sample.tree provided by inserting the species  specified  in
-       species.txt.  The  process  is  repeated  100 times, using the over the
-       branch lengths method, and the resulting trees are  stored  in  a  file
-       named expanded-trees.nex
-
-       sunplin dist sample.tree
-
-       calculate  the  patristic  distance matrix of the sample.tree provided.
-       The resulting matrix is stored in a file named sample-dist.txt
-
-       sunplin dist sample.nex -l dist-matrices
-
-       sunplin dist sample.tree
-
-       calculate  the  patristic  distance matrix of the sample.tree provided.
-       The resulting matrix is stored in a file named sample-dist.txt
-
-       sunplin dist sample.nex -l dist-matrices
-
-       calculate the patristic distance matrices of all trees provided in sam-
-       ple.nex.  The resulting matrices are stored in a file named dist-matri-
-       ces.txt  
-
----
-USAGE: R version
-
-Tree expansion example:
-
-dyn.load("sunplin-r.so")
-.Call("expd","sample.tree","species.txt",100,1)
-
-> dyn.load("sunplin-r.so")
-> x<-.Call("expd","sample.tree","species.txt",100,1)
-> y<-file("sample-expd.nex")
-> writeLines(x,y)
-> close(y)
-
-Distance matrix computation example:
-
-dyn.load("sunplin-r.so")
-.Call("dist","sample.tree")
-
-start up R from the terminal and copy the commands below
-
-Note: dyn.load("sunplin-r.so") must precede any .Call(...)
-
-======

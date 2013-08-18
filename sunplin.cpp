@@ -260,9 +260,9 @@ void parsingTree(){
 	grafo.clear();
 	father.clear();
 	grafoMatrix.clear();
-	grafo.resize(nodes+200);
-	grafoMatrix.resize(nodes+200);
-	father.resize(nodes+200);
+	grafo.resize(nodes+10);
+	grafoMatrix.resize(nodes+10);
+	father.resize(nodes+10);
 	while(line[n] != ';') n++;
 	while (i < n) {
 		done = 0;
@@ -535,22 +535,31 @@ void calcMatrixDistance(char local[100], string nameNewFile){
 	ifstream in( local , ifstream::in );
 	char *p = strstr(local, ".nex");
 	bool stop = false;
+	string aux = "";
 	if( p != NULL ){
-		nameNewFile += ".txt";
+		ifstream in( local , ifstream::in );
+		nameNewFile += ".xls";
 		fstream out (nameNewFile.c_str(), fstream::out);
+		bool start = true;
+		char *p;
 		while ( in >> line ){
 			p = strstr(line, "(");
 			while( p == NULL ){ if( !(in >> line) ){ stop = true; break; }  p = strstr(line, "("); }
 			if( stop ) break;
 			parsingTree();
-			
 			calc();
-			out << "Matrix Distance  " << qtdMatrix++ << " :\n";
+			int qtdNosFolhas = 0, tta;
+			aux = "";
 			for(int i = 0; i < nodes; i++){
-				if(!noat[i])
-					out << "\t" << taxon[i];
+				if(!noat[i]){
+					qtdNosFolhas++;
+					aux += "\t";
+					for( int j = 0; taxon[i][j] != '\0'; j++ ) aux += taxon[i][j];
+				}
 			}
-			out << "\n";
+			if( start ) out << qtdNosFolhas << "\n";
+			start = false;
+			out << aux << "\n";
 			for(int i = 0; i < nodes; i++){
 				if(!noat[i]){
 					out << taxon[i];
@@ -560,20 +569,28 @@ void calcMatrixDistance(char local[100], string nameNewFile){
 					out << "\n";
 				}
 			}
-			for( int i = 0; i < nodes; i++ ) noat[i] = 0;
+			for( int i = 0; i <= nodes; i++ ) noat[i] = 0;
+			grafo.clear();
+			grafoMatrix.clear();
+			father.clear();
 		}
 		out.close();
 	}
 	else{
 		parsingTree();
 		calc();
-		nameNewFile += ".txt";
+		int qtdNosFolhas = 0;
+		nameNewFile += ".xls";
 		fstream out (nameNewFile.c_str(), fstream::out);
 		for(int i = 0; i < nodes; i++){
-			if(!noat[i])
-				out << "\t" << taxon[i];
+			if(!noat[i]){
+				qtdNosFolhas++;
+				aux += "\t";
+				for( int j = 0; taxon[i][j] != '\0'; j++ ) aux += taxon[i][j];
+			}
 		}
-		out << "\n";
+		out << qtdNosFolhas << "\n";
+		out << aux << "\n";
 		for(int i = 0; i < nodes; i++){
 			if(!noat[i]){
 				out << taxon[i];

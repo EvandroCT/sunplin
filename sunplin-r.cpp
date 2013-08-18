@@ -1,23 +1,3 @@
-/*********************************************************************
-11	
-12	 Copyright (C) 2013-2016 by Welton Cardoso
-13	
-14	 This program is free software; you can redistribute it and/or modify
-15	 it under the terms of the GNU General Public License as published by
-16	 the Free Software Foundation; either version 2 of the License, or
-17	 (at your option) any later version.
-18	
-19	 This program is distributed in the hope that it will be useful,
-20	 but WITHOUT ANY WARRANTY; without even the implied warranty of
-21	 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-22	 GNU General Public License for more details.
-23	
-24	 You should have received a copy of the GNU General Public License
-25	 along with this program; if not, write to the Free Software
-26	 Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-27	
-28	 ********************************************************************/
-
 #include <set>
 #include <list>
 #include <stack>
@@ -48,6 +28,7 @@ using namespace std;
 struct timeb ini, fim;
 const double INF = 1e50;
 const int MAXN = 100010;
+const int MAXGENERATENAMES = 1000;
 const int MAXV = 98;
 const  double EPS = 1e-9;
 int cmp(double a, double b = 0.0){ if(fabs(a-b) < EPS) return 0; return a > b ? 1 : -1; }
@@ -92,11 +73,11 @@ int chain[ MAXN ];
 int homepos[ MAXN ];
 int pos, cntchain;
 int chainleader[ MAXN ];
-char taxon[7000][100], line[MAXN], taxonCopia[7000][100], version;
+char taxon[7000][100], line[MAXN*10], taxonCopia[7000][100], version;
 double bl[MAXN], blCopy[MAXN];
 int  up[MAXN], down[7000][7000], sumAux[MAXN], noat[MAXN], depth[MAXN], nodes, sometimesGenerates, treeAmount, amountNewNames = 0, camNode = 0, arvoresQt = 0;
 bool dfstop;
-void parsingTree();
+int parsingTree();
 string newSpeciesFile(char local[100]);
 void insertSpecies(int u, string name);
 string convertNewickToNexus(int op, string nw);
@@ -117,28 +98,40 @@ vector < int >  father;
 void explore( int x, int dad );
 void heavy_light( int x, int dad, int k, int p );
 int lca(int a, int b) ;
+char filename[MAXN*10];
 
-extern "C" SEXP dist(SEXP file){
+extern "C" SEXP dist(SEXP file, SEXP option){
 	int leaves = 0;
-	char filename[400];
+	char op[100];
 	SEXP mat;
 	PROTECT(file = AS_CHARACTER(file));
+	PROTECT(option = AS_CHARACTER(option));
 	strcpy(filename, CHAR(STRING_ELT(file,0)));
-	fstream arquivo (filename, fstream::in | fstream::out);
-	if(!arquivo.good()){ cout << "Error! The file " << filename << " does not exist\n"; exit(1); }
-	arquivo >> line;
+	strcpy(op, CHAR(STRING_ELT(option,0)));
+	if( !strcmp(op,"file") ){
+		fstream arquivo (filename, fstream::in | fstream::out);
+		if(!arquivo.good()){ cout << "Error! The file " << filename << " does not exist\n"; PROTECT(mat = allocMatrix(REALSXP, 0, 0));	UNPROTECT(3); return mat; }
+		arquivo >> line;
+	}
+	else if( !strcmp(op,"tree") ){
+		strcpy(line, filename);
+	}
+	else{
+		cout << "Error! Invalid option. Please choose 'tree' or 'file' as an option\n";
+		PROTECT(mat = allocMatrix(REALSXP, 0, 0));	
+		UNPROTECT(3);
+		return mat;
+	}
 	parsingTree();
 	for( int i = 0; i < nodes; i++ ) if( !noat[i] ) leaves++;
 	PROTECT(mat = allocMatrix(REALSXP, leaves, leaves));	
 	for(int ss = 0 ; ss < 1; ss++){
-		int atual, tam, aux, ret = 0, menor = 0, k, w;
-		double  a, c;
-		int xnode, ynode, d;
+		int  k, w;
+		int  d;
 		for(int we = 0; we <= nodes; we++) nodedad[we] = -1;
 		explore( 1, 0 );
 		pos = 0, cntchain = 0;
 		heavy_light( 1, 0, -1, 0 );
-		BFS(); 
 		int aa = 0, bb = 0;
 		for (k = 1; k <= nodes; k++){
 			REAL(mat)[aa + leaves*aa] = 0.;
@@ -156,36 +149,36 @@ extern "C" SEXP dist(SEXP file){
 			bb = 0;
 		}
 	}
-	UNPROTECT(2);	
+	UNPROTECT(3);	
 	return mat;
 }
 
 extern "C" SEXP expd(SEXP file, SEXP newSpecie, SEXP vz, SEXP v){
 	generateNamesSpecies();
 	srand ( time(NULL) );
-	char filename[400], novasEspecies[400], versao[10];
-	int *pNum;
+	char filename[400], novasEspecies[400];
+	int *pNum, *ver;
 	string ret = "";
-	SEXP ans = NEW_CHARACTER(100000);
-	v = AS_CHARACTER(v);
-	file = AS_CHARACTER(file);
-	newSpecie = AS_CHARACTER(newSpecie);
-	vz = AS_INTEGER(vz);
+	SEXP ans = PROTECT(NEW_CHARACTER(1000000));
+	PROTECT(v = AS_INTEGER(v));
+	PROTECT(file = AS_CHARACTER(file));
+	PROTECT(newSpecie = AS_CHARACTER(newSpecie));
+	PROTECT(vz = AS_INTEGER(vz));
 	strcpy(filename, CHAR(STRING_ELT(file,0)));
 	strcpy(novasEspecies, CHAR(STRING_ELT(newSpecie,0)));
-	strcpy(versao, CHAR(STRING_ELT(v,0)));
 	pNum = INTEGER(vz);
-	version = versao[0];
+	ver = INTEGER(v);
+	version = '0'+(*ver);
 	sometimesGenerates = *pNum;
-	cout << sometimesGenerates << "\n";
 	fstream arquivo (filename, fstream::in | fstream::out);
-	if(!arquivo.good()){ cout << "Error! The file " << filename << " does not exist\n"; exit(1); }
+	if(!arquivo.good()){ cout << "Error! The file " << filename << " does not exist\n"; UNPROTECT(5); return ans; }
 	arquivo >> line;
 	arquivo.close();
-	parsingTree();
+	if( parsingTree() ){ UNPROTECT(5); return ans; }
 	ret = newSpeciesFile(novasEspecies);
-	ans = mkString(ret.c_str());
-	//UNPROTECT(2);
+	if( ret != "-1" )
+		ans = mkString(ret.c_str());
+	UNPROTECT(5);
 	return ans;
 }
 
@@ -194,23 +187,14 @@ void limpar(){ for(int i = 0; i < nodes+1; i++) bl[i] = 0.; grafo.clear(); nodes
 
 void generateNamesSpecies(){
 	char alphabet[ ] = {'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'};
-	char number[][3] = {"1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26"};
-	string name = "";
-	for(int i = 0; i < 26; i++){
-		for(int j = 0; j < 26; j++){
-			name = "";
-			name += alphabet[i];
-			name += number[j];
-			nameRand.push_back(name);
-		}
-	}
-	for(int i = 0; i < 26; i++){
-		for(int j = 0; j < 26; j++){
-			name = "";
-			name += alphabet[i];
-			name += alphabet[i];
-			name += number[j];
-			nameRand.push_back(name);
+	string nameEspecie = "";
+	char numberAux[100];
+	for(int i = 0; i < MAXGENERATENAMES; i++){
+		sprintf(numberAux, "%d", i);
+		for( int j = 0; j < 26; j++ ){
+			nameEspecie += alphabet[j];
+			nameRand.push_back(nameEspecie + numberAux);
+			nameEspecie = "";
 		}
 	}
 }
@@ -225,11 +209,11 @@ string convertNewickToNexus(int op, string nw){
 		case 1: 
 			sprintf(numBer, "%d", arvoresQt); 
 			arvoresQt++; 
-			ret += "tree";
+			ret += "TREE tree";
 			ret += numBer;
-			ret += ":\n";
+			ret += " = ";
 			ret += nw;
-			ret += "\n";
+			ret += ";\n";
 			break;
 		case 2: 
 			ret += "end;"; 
@@ -242,13 +226,12 @@ void errorType(string s1, string s2, string s3){
 	if(s1 != "") printf("%s",s1.c_str());
 	if(s2 != "") printf("%s",s2.c_str());
 	if(s3 != "") printf("%s",s3.c_str());
-	exit(1);
 }
 
-void parsingTree(){
-	int n = 0, i = 0, nodei = -1, leni = -1, atn = 0, branchlengths = 0, done = 0, q;
+int parsingTree(){
+	int n = 0, i = 0, nodei = -1, leni = -1, atn = 0, branchlengths = 0, done = 0;
 	int lbrack, rbrack, comma, quant;
-	char ch, tmp[15], iname[1000], taxa[1000];
+	char ch, taxa[1000];
 	comma = quant = nodes = rbrack = lbrack = 0;
 	quant = strlen(line);
 	for(int i = 0; i < quant; i++){
@@ -257,7 +240,7 @@ void parsingTree(){
 		if(ch == ')') rbrack++;
 		if(ch == ',') comma++;
 	}
-	if(lbrack != rbrack) errorType("Unbalanced parenthesis.\n","","");
+	if(lbrack != rbrack){ errorType("Unbalanced parenthesis.\n","",""); return 1; }
 	nodes = lbrack + comma + 1;
 	line[quant-1] = 59;
 	line[quant] = 0;
@@ -342,6 +325,7 @@ void parsingTree(){
 	for (i = 0; i < nodes; i++){ 
 		if (strcmp(taxon[i], ".") == 0) strcpy(taxon[i], "");
 	}
+	return 0;
 }
 
 
@@ -368,15 +352,16 @@ int contId = 0;
 int searchNameEspecie(char *str){
 	for(int i = 0; i < nodes; i++) 
 		if( !strcmp(str, taxon[i]) ) return (i + 1);
-	errorType("Error! The species ",str," does not belong to tree!");
+	errorType("Error! The specie ",str," not belong to tree!");
+	return -1;
 }
 
 string newSpeciesFile(char local[100]){
 	ifstream in( local , ifstream::in );
-	if(!in.good()) errorType("Error opening file at: ",local,"\n");  
+	if(!in.good()){ errorType("Error opening file in place: ",local,"\n"); return "-1"; }
 	//fstream filestr ("out.nex", fstream::out);
-	string out = "";
-	string aux = convertNewickToNexus(0,"");
+	string out = "", aux = "";
+	out = convertNewickToNexus(0,"");
 	vector < vector<int > > grafoBackup ( grafo.begin(), grafo.end());
 	vector < int > fatherBackup( father.begin(), father.end() );
 	memcpy(blCopy,bl,sizeof(blCopy));
@@ -388,6 +373,7 @@ string newSpeciesFile(char local[100]){
 	else dfs_insert_V1(1);
 	while(in >> name >> insertionPoint){
 		int ptInsercao = searchNameEspecie(insertionPoint);
+		if( ptInsercao < 0 ) return "-1";
 		espN.push_back(insert(name,ptInsercao));
 		espNames.push_back(insert(name,ptInsercao));
 	}
@@ -395,7 +381,7 @@ string newSpeciesFile(char local[100]){
 		amountNewNames = 0;
 		for(int j = 0; j < nodes+10; j++) bl[j] = blCopy[j]; 
 		if( version == '2' ) {
-			for(int j = 0; j < espN.size(); j++){
+			for(int j = 0; j < (int)espN.size(); j++){
 				double calc = nodeInfo[(sum[espN[j].insertionPoint-1].sizeSubTree-1) + espN[j].insertionPoint].valor - nodeInfo[espN[j].insertionPoint].valor;
 				calc *= (((double)(rand() % MAXV) + 1.0)/100.0);
 				calc += nodeInfo[espN[j].insertionPoint].valor;
@@ -404,7 +390,7 @@ string newSpeciesFile(char local[100]){
 			}
 		}
 		else
-			for( int j = 0; j < espNames.size(); j++) 
+			for( int j = 0; j < (int)espNames.size(); j++) 
 				insertSpecies((rand()%sumAux[espNames[j].insertionPoint]) + espNames[j].insertionPoint, espNames[j].name);
 
 		aux = convertNewickToNexus(1, grafoToNewick(1));
@@ -422,7 +408,7 @@ string newSpeciesFile(char local[100]){
 
 
 void removeAresta(int fatherAux, int child){
-	for(int i = 0; i < grafo[fatherAux].size(); i++){
+	for(int i = 0; i < (int)grafo[fatherAux].size(); i++){
 		if(grafo[fatherAux][i] == child){
 			grafo[fatherAux].erase(grafo[fatherAux].begin() + i);
 			break;
@@ -487,16 +473,16 @@ void insertSpecies(int u, string name){
 		father[fi] = nodes + 1;
 	}
 	nodes += 2;
-	if(nodes >= grafo.size()) grafo.resize(grafo.size() + 100); 
+	if(nodes+2 >= grafo.size()) grafo.resize(grafo.size() + 100); 
+	if(nodes+2 >= father.size()) father.resize(father.size() + 100); 
 }
 
 
 int dfs_insert_V1( int u ){
-	int sAux = 1, poss = 0;
-	double ans = 0.;
+	int sAux = 1;
 	sum[u-1].rootCount = (grafoMatrix[u].size() == 0);
 	sum[u-1].sumSubTree = 0.;
-	for(int i = 0; i < grafoMatrix[u].size(); i++){
+	for(int i = 0; i < (int)grafoMatrix[u].size(); i++){
 		int at = grafoMatrix[u][i];
 		sAux += dfs_insert_V1(at);
 		sum[u-1].rootCount += sum[at-1].rootCount;
@@ -527,23 +513,6 @@ double dfs_sum_V2( int u){
 	return (sumAux);
 }
 
-void BFS(){
-	int atual, tam, aux;
-	float b;
-	queue < no > fila;
-	fila.push(no(1,0));
-	while(!fila.empty()){
-		atual = fila.front().x;
-		b = fila.front().b;
-		bl[atual-1] = b;
-		fila.pop();
-		tam = grafo[atual].size();
-		for(int i = 0; i < tam; i++){
-			aux = grafo[atual][i];
-			fila.push(no(aux,b+bl[aux-1]));
-		}
-	}
-}
 
 void explore( int x, int dad ) {
     if( nodedad[x] != -1 ) return;
@@ -551,6 +520,7 @@ void explore( int x, int dad ) {
     treesize[x] = 1;
     for( int i = 0; i < ( int )grafo[x].size(); ++i ){
         if( grafo[x][i] != dad ) {
+			bl[grafo[x][i] - 1] += bl[ x - 1];
             explore( grafo[x][i], x );
             treesize[x] += treesize[ grafo[x][i] ];
         }
