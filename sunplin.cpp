@@ -307,7 +307,7 @@ void parsingTree(){
 		else if (line[i] == ':'){
 			string num = "";
 			i++;
-			while(((line[i] >= 48) && (line[i] <= 57)) || (line[i] == 46) || (line[i] == 'E') || (line[i] == '-')){
+			while(((line[i] >= 48) && (line[i] <= 57)) || (line[i] == 46) || (line[i] == 'E') || (line[i] == 'e') || (line[i] == '-')){
 				num += line[i];
 				i++;
 			}
