@@ -103,7 +103,7 @@ class DTree{
 
 class HTree: public DTree{
 	
-	public:
+	private:
 		SoaTree hostData;			// struct of arrays to hold the trees' data 		
 		vector<string> nodeName; 	// names of taxa fetched from newick and PUT file
 		size_t treeSize;			// size of the tree padded to multiple of sizeof(int4) (due to a GPU memory aligment requisite)
