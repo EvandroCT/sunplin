@@ -28,9 +28,6 @@
 
 using namespace std;
 
-#define NOCHILD USHRT_MAX-1
-#define NOPARENT USHRT_MAX
-
 #define CHECK(call) \
 		{ \
 			const cudaError_t error = call; \
@@ -50,14 +47,22 @@ using namespace std;
 			} \
 		}
 
+typedef struct {
+	ushort side	: 1;
+	ushort idx	: 15;
+} paren_t;
+
+#define NOCHILD USHRT_MAX		//16 bits
+#define NOPARENT USHRT_MAX/2	//15 bits
+
 class SoaTree {
 	private:
-		ushort *parent;		// nodes' parents or the subtrees' roots' indices where new nodes shall be inserted (MDCC)
-		ushort *lChild;		// nodes' left children
-		ushort *rChild;		// nodes' right children
-		float *branch;		// lengths of the nodes' branches (distance to the parent)
-		float *dRoot;		// distances between nodes and root (sum of the paths' branches)
-		ushort *inseq;		// vector with the sequence of indices of puts to be inserted
+		paren_t	*parent;	// nodes' parents or the subtrees' roots' indices where new nodes shall be inserted (MDCC)
+		ushort	*lChild;	// nodes' left children
+		ushort	*rChild;	// nodes' right children
+		float	*branch;	// lengths of the nodes' branches (distance to the parent)
+		float	*dRoot;		// distances between nodes and root (sum of the paths' branches)
+		ushort	*inseq;		// vector with the sequence of indices of puts to be inserted
 	public:
 		__host__ SoaTree() = default;		
 		__host__ SoaTree(int num_nodes, int num_ins) {soalloc(num_nodes,num_ins);}
@@ -69,7 +74,7 @@ class SoaTree {
 		{
 			size_t size = (3*sizeof(ushort) + 2*sizeof(float))*num_nodes + sizeof(ushort)*num_ins; //minimal amount of bytes needed to represent the tree 
 			int r = size%sizeof(int4);
-			size += r ? sizeof(int4)-r : 0;	//size of the tree padded to multiple of sizeof(int4) (due to a GPU memory aligment requisite)
+			size += r ? sizeof(int4)-r : 0;	//size of the tree padded to a multiple of sizeof(int4) (due to a GPU memory aligment requisite)
 			return size;
 		}
 		__host__ void soalloc(int num_nodes, int num_ins)
@@ -79,24 +84,26 @@ class SoaTree {
 			setOffs(num_nodes, ptr);
 		}
 
-		__host__ __device__ ushort	getParent	(int i) const {return parent[i];}
+		__host__ __device__ ushort	getParent	(int i) const {return parent[i].idx;}
+		__host__ __device__ ushort	getSide		(int i) const {return parent[i].side;}
 		__host__ __device__ ushort	getlChild	(int i) const {return lChild[i];}
 		__host__ __device__ ushort	getrChild	(int i) const {return rChild[i];}
 		__host__ __device__ ushort 	getInseq	(int i) const {return inseq[i];}
 		__host__ __device__ float 	getBranch	(int i) const {return branch[i];}
 		__host__ __device__ float	getdRoot	(int i) const {return dRoot[i];}
 
-		__host__ __device__ void setParent	(ushort	val, int i)	{parent[i]	= val;}
-		__host__ __device__ void setlChild	(ushort	val, int i)	{lChild[i]	= val;}
-		__host__ __device__ void setrChild	(ushort	val, int i)	{rChild[i]	= val;}
-		__host__ __device__ void setBranch	(float	val, int i)	{branch[i]	= val;}
-		__host__ __device__ void setdRoot	(float	val, int i)	{dRoot[i]	= val;}
-		__host__ __device__ void setInseq	(ushort	val, int i)	{inseq[i]	= val;}
+		__host__ __device__ void setParent	(ushort	val, int i)	{parent[i].idx	= val;}
+		__host__ __device__ void setSide	(ushort	val, int i)	{parent[i].side	= val;}
+		__host__ __device__ void setlChild	(ushort	val, int i)	{lChild[i]		= val;}
+		__host__ __device__ void setrChild	(ushort	val, int i)	{rChild[i]		= val;}
+		__host__ __device__ void setBranch	(float	val, int i)	{branch[i]		= val;}
+		__host__ __device__ void setdRoot	(float	val, int i)	{dRoot[i]		= val;}
+		__host__ __device__ void setInseq	(ushort	val, int i)	{inseq[i]		= val;}
 };
 
 void SoaTree::setOffs(int num_nodes, void* base) {
-	parent 	= (ushort*) base;
-	lChild 	= parent	+ num_nodes;
+	parent 	= (paren_t*) base;
+	lChild 	= (ushort*)	(parent+num_nodes);
 	rChild 	= lChild	+ num_nodes;	
 	branch 	=(float*)	(rChild+num_nodes);
 	dRoot 	= branch	+ num_nodes;
@@ -134,6 +141,7 @@ class DTree{
 		__host__ __device__ size_t	getSize		()		const {return treeSize;};
 
 		__host__ __device__ ushort	getParent	(int i)	const {return devData.getParent(i);}
+		__host__ __device__ ushort	getSide		(int i)	const {return devData.getSide(i);}
 		__host__ __device__ ushort	getlChild	(int i)	const {return devData.getlChild(i);}
 		__host__ __device__ ushort	getrChild	(int i)	const {return devData.getrChild(i);}
 		__host__ __device__ float	getBranch	(int i)	const {return devData.getBranch(i);}
@@ -143,9 +151,10 @@ class DTree{
 		__device__ void	setTreeIdx(int i){devData.setOffs(nNodes,devData.getPtr()+treeSize*i);}
 
 		/* TODO: THROW OVER/UNDERFLOW EXCEPTION */
+		__device__ void	setParent	(ushort	val, int i)	{devData.setParent(val,i);}
+		__device__ void	setSide		(ushort	val, int i)	{devData.setSide(val,i);}
 		__device__ void	setlChild	(ushort	val, int i)	{devData.setlChild(val,i);}
 		__device__ void	setrChild	(ushort	val, int i)	{devData.setrChild(val,i);}
-		__device__ void	setParent	(ushort	val, int i)	{devData.setParent(val,i);}
 		__device__ void	setBranch	(float	val, int i)	{devData.setBranch(val,i);}
 		__device__ void	setdRoot	(float	val, int i)	{devData.setdRoot(val,i);}
 		__device__ void	setInseq	(ushort	val, int i)	{devData.setInseq(val,i);}		
@@ -174,6 +183,11 @@ void DTree::print(unordered_map<int,string> names){
 		cout << endl;
 		for(j=0; j<nNodes; j++) {
 			aux = ht.getParent(j)!=NOPARENT ? names[ht.getParent(j)]+"("+to_string(ht.getParent(j))+")" : "-1";
+			cout << left << setw (35) << aux;
+		} 
+		cout << endl;
+		for(j=0; j<nNodes; j++) {
+			aux = ht.getSide(j)==1 ? "left" : "right";
 			cout << left << setw (35) << aux;
 		} 
 		cout << endl;
@@ -210,6 +224,7 @@ class HTree: public DTree{
 		
 		/* TODO: THROW OVER/UNDERFLOW EXCEPTION */		
 		__host__ void setParent (int 	val, int i)	{hostData.setParent(val,i);}
+		__host__ void setSide	(int 	val, int i)	{hostData.setSide(val,i);}
 		__host__ void setlChild (int 	val, int i)	{hostData.setlChild(val,i);}
 		__host__ void setrChild (int 	val, int i)	{hostData.setrChild(val,i);}
 		__host__ void setBranch (float 	val, int i)	{hostData.setBranch(val,i);}
@@ -219,6 +234,7 @@ class HTree: public DTree{
 		
 		/* TODO: THROW OVER/UNDERFLOW EXCEPTION */
 		__host__ ushort	getParent	(int i) const	{return hostData.getParent(i);}
+		__host__ ushort	getSide		(int i) const	{return hostData.getSide(i);}
 		__host__ ushort	getlChild	(int i) const	{return hostData.getlChild(i);}
 		__host__ ushort	getrChild	(int i) const 	{return hostData.getrChild(i);}
 		__host__ float	getBranch	(int i) const 	{return hostData.getBranch(i);}
@@ -267,6 +283,7 @@ bool DTree::compareTo(HTree *h_tree){
 			if(	tree.getdRoot(i)	!= h_tree->getdRoot(i)	||
 				tree.getBranch(i)	!= h_tree->getBranch(i) ||
 				tree.getParent(i)	!= h_tree->getParent(i)	||
+				tree.getSide(i)		!= h_tree->getSide(i)	||
 				tree.getlChild(i)	!= h_tree->getlChild(i)	||
 				tree.getrChild(i)	!= h_tree->getrChild(i)	)
 					return false;
@@ -339,18 +356,14 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
          pos += to_string(n_unamed).length()+3;
          n_unamed++;
     }
-
     // fill root's empty name (if absent)
     for(pos=fileLine.length(); fileLine[pos]!=';'; pos--);
     if(fileLine[--pos]==')')
     	fileLine.replace(pos,2,")#"+to_string(n_unamed)+";");
-
     // fill new ancestors' names
     for(int i=0; i<getnInsSpc();i++)
-    	setName("na#"+to_string(i+1),getIdxInsAnc()-i); //the new ancestor's insertions order is backward oriented
-
-  	cout << "FileLine: " << fileLine << endl << endl;
-	
+    	setName("na#"+to_string(i+1),getIdxInsAnc()-i); //the new ancestors' insertions order is backward oriented
+  	cout << "FileLine: " << fileLine << endl << endl;	
 	for(int i=0;i<nNodes;i++){		
 		setParent(NOPARENT,i);
 		setlChild(NOCHILD,i);
@@ -358,7 +371,6 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
 		setBranch(0,i);
 		setdRoot(0,i);		
 	}
-
   	// preencher vetor com todas as species
 	// usando o regex para pegar todos os folhas
 	string copyNewick = fileLine;
@@ -384,16 +396,13 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
 	    	auxiliarGeral = m.position(i) +1; // posicão do match
 		    while(copyNewick[auxiliarGeral]!=':' && copyNewick[auxiliarGeral]!=';') {
 		    	ancestral += copyNewick[auxiliarGeral++];	    			
-		    }
-		    
+		    }		    
   		} 
   		setName(ancestral,auxilarPreencherVetor);
   		auxilarPreencherVetor++;
 	    copyNewick = m.suffix().str();
-  	}
-  	
-  	 
-  	setParent(-1,nNodes-1); // no raiz não tem um pai
+  	}  	  	 
+  	setParent(NOPARENT,nNodes-1); // no raiz não tem um pai
   	
 	// logica se da no principio de achar todos os nos folhas pares, em cada loop, dai verificamos o seu devido pai
 	// e os "eliminamos" da arvore, criando novos filhos folhas.
@@ -457,14 +466,14 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
     			indexleftChild = i;
     			if( (indexrightChild != -1) and (posParent != -1) ) break;
     		}
-    	}    	
-
+    	}
     	// preencher vetores
     	setParent(posParent,indexleftChild);
+    	setSide(1,indexleftChild);
     	setParent(posParent,indexrightChild);
+    	setSide(0,indexrightChild);
     	setlChild(indexleftChild,posParent);
     	setrChild(indexrightChild,posParent);
-
     	// comprimento do ramo
     	try{
 	    	setBranch(atof(comprimeRamoRight.c_str()),indexrightChild);
@@ -487,7 +496,6 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
   		indexleftChild = -1;
 		auxiliarNumNos = auxiliarNumNos + 2; // ou seja, foi retirado 2 filhos
 	}
-
 	 // preencher novos put
  	string auxiliarPut[2], auxiliar, put;
 
@@ -505,16 +513,13 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
 	       		auxiliarPut[auxiliarGeral++] = put;	       		
 	           	put = "";
 	           	alphabeticModeOn = false;
-	       }
-
-	       else{
+	       }else{
 	       		if ( !isspace(auxiliar[elemenIndex]) ){ 
 	       			alphabeticModeOn = true;
 	        		put += auxiliar[elemenIndex];
 	        	}	        	
 	       }	 
 	    }
-
 	    if(put != ""){
 	    	auxiliarPut[auxiliarGeral] = put;
 	    }
@@ -531,21 +536,17 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
 	    	}
 	    }	
   	} 
-
 	// Calcular comprimento do ramo ate a raiz
 	// usando busca em profundidade
 	bool folhaDone = false;
 	int visited=0;
-
 	setBranch(0,nNodes-1);	//root has no branch
 	setdRoot(0,nNodes-1); 	//root has no distance to himself
 	int posRamo = getrChild(nNodes-1);//start with the root's right child;
-
 	while(visited<quantFolhas*2-2){	
 		// primeiramente, faz uma busca profunda, pela esquerda(mas na vdd tanto faz), e busca um no leaf
 		// com isso, sabemos a profundidade de todos os outros folhas, restando então apenas os nos internos
 		// essa regra se aplica apenas para arvores filogeneticas
-
 		while(not folhaDone){
 			setdRoot(getdRoot(getParent(posRamo))+getBranch(posRamo),posRamo);
 			if(getrChild(posRamo) == NOCHILD){ // ou seja, não tem filho(leaf)
@@ -562,8 +563,7 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
 			}
 			visited++;
 			posRamo = getrChild(posRamo); // proximo filho a direita
-		}
-		
+		}		
 		// fazer a busca em profundidade agr para os nos internos
 		// se os dois filhos da raiz, ja tiverem seus comprimentos achados,
 		// entao significa q a busca em profundidade foi concluida
@@ -615,8 +615,9 @@ __global__ void insertion(DTree tree, curandState_t* devStates){
 	tree.setTreeIdx(idx);
     curandState state = devStates[idx];    
     unsigned int i,j,t;
-    int taxon, mdcc, ancidx;
-    float branching;
+    int taxon, mdcc;
+    int ancidx; //the put's parent node created to represent the cladogenesis
+    float depth;//depth in wich the put will be inserted down the subtree rooted at mdcc
     float height = tree.getdRoot(0); //height of the tree (distance from leaf to root)
 
     if (tree.getnInsSpc() > 1) {
@@ -629,34 +630,38 @@ __global__ void insertion(DTree tree, curandState_t* devStates){
     }
 
     float sum;
+    ushort put; //current put going to be inserted
 	for(i=0; i<tree.getnInsSpc(); i++){
 		t = curand(&state);	//path
-		mdcc = tree.getParent(tree.getInseq(i));	
-		branching = curand_uniform(&state) * (height-tree.getdRoot(mdcc));
+		put = tree.getInseq(i);
+		mdcc = tree.getParent(put);	
+		depth = curand_uniform(&state) * (height-tree.getdRoot(mdcc));
 		taxon = mdcc;
 		sum=0;
-		do{			
-			taxon = t&1 ? tree.getlChild(taxon) : tree.getrChild(taxon);
-			sum+= tree.getBranch(taxon);
+		do{		
 			t>>=1;
-		}while(sum<branching);
-		ancidx = tree.getIdxInsAnc()-(tree.getInseq(i)-tree.getIdxInsSpc());	//calculate corresponding ancestor node
-		if(taxon==tree.getlChild(tree.getParent(taxon))){
-			tree.setrChild(tree.getInseq(i),ancidx);
-			tree.setlChild(taxon,ancidx);
-			tree.setlChild(ancidx,tree.getParent(taxon));
+			taxon = t&1 ? tree.getlChild(taxon) : tree.getrChild(taxon);
+			sum+= tree.getBranch(taxon);			
+		}while(sum<depth);
+		ancidx = tree.getIdxInsAnc()-(put-tree.getIdxInsSpc());	//calculate corresponding ancestor node
+		if(t&1){	//if came from the left
+			tree.setrChild(put,ancidx);		//put become the right child
+			tree.setlChild(taxon,ancidx);	//the sister clade continue being at left
+			tree.setlChild(ancidx,tree.getParent(taxon));//the put's parent node takes place of the sister's clade side
 		}			
-		else{
-			tree.setlChild(tree.getInseq(i),ancidx);
-			tree.setrChild(taxon,ancidx);
-			tree.setrChild(ancidx,tree.getParent(taxon));
+		else{	//if came from the right
+			tree.setlChild(put,ancidx);		//put become the left child
+			tree.setrChild(taxon,ancidx);	//the sister clade continue being at right
+			tree.setrChild(ancidx,tree.getParent(taxon));//the put's parent node takes place of the sister's clade side
 		}
-		tree.setParent(tree.getParent(taxon),ancidx);								 			//set up new ancestor's parent (same of the sister group)
-		tree.setParent(ancidx,tree.getInseq(i));									 			//set up PUT's parent
-		tree.setParent(ancidx,taxon);												 			//set up sister's new parent
-		tree.setBranch(tree.getBranch(taxon)-(sum-branching),ancidx);				 			//set up new ancestor's branch
-		tree.setBranch(sum-branching,taxon);											 		//set up sister's new branch length
-		tree.setBranch(height-(tree.getdRoot(mdcc)+branching),tree.getInseq(i));	 			//set up PUT's branch length
+		tree.setParent(tree.getParent(taxon),ancidx);				//set up new ancestor's parent (same of the sister group)
+		tree.setSide(t&1,ancidx);									//set up new ancestor's side (same of the sister group)
+		tree.setParent(ancidx,put);									//set up PUT's parent
+		tree.setSide(!(t&1),put);									//set up PUT's side (the sister's reverse)
+		tree.setParent(ancidx,taxon);								//set up sister's new parent
+		tree.setBranch(tree.getBranch(taxon)-(sum-depth),ancidx);	//set up new ancestor's branch
+		tree.setBranch(sum-depth,taxon);							//set up sister's new branch length
+		tree.setBranch(height-(tree.getdRoot(mdcc)+depth),put);		//set up PUT's branch length
 		tree.setdRoot (tree.getdRoot(tree.getParent(ancidx))+tree.getBranch(ancidx),ancidx);	//set up new ancestor's distance to the root
 	}
 }
@@ -679,9 +684,8 @@ int main(int argc, char *argv[]){
 	cout << "nNodes: " << tree->getnNodes() << endl;
 	cout << "nInsSpc: " << tree->getnInsSpc() << endl;
 	cout << "idxInsSpc: " << tree->getIdxInsSpc() << endl;
-	cout << "idxInsAnc: " << tree->getIdxInsAnc() << endl;
-
-	cout << endl;
+	cout << "idxInsAnc: " << tree->getIdxInsAnc() << endl << endl;
+	
 	if(replics.compareTo(tree))
 		cout << "Data does match!" << endl;
 	else
@@ -692,9 +696,7 @@ int main(int argc, char *argv[]){
 	setup_kernel<<<1,num_reps>>>(1,devStates);
 	insertion<<<1,num_reps>>>(replics,devStates);	
 	CHECK(cudaDeviceSynchronize());
-
-	replics.print(tree->getNames());	
-
+	replics.print(tree->getNames());
 	CHECK(cudaDeviceReset());	
 	exit(EXIT_SUCCESS);
 	
