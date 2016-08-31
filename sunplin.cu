@@ -25,8 +25,24 @@
 #include <regex>
 #include <unordered_map>
 #include <iomanip>
+#include <sys/time.h>
 
 using namespace std;
+
+long long start_time, end_time;
+struct timeval tv;
+#define START_TIMER() \
+		{ \
+			gettimeofday(&tv, NULL); \
+			start_time = tv.tv_sec * 1000000 + tv.tv_usec; \
+		}
+//return time measurement in ms
+#define STOP_TIMER(time_spent) \
+		{ \
+			gettimeofday(&tv, NULL); \
+			end_time = tv.tv_sec * 1000000 + tv.tv_usec; \
+			time_spent = ((double)(end_time-start_time))/1000; \
+		}
 
 #define CHECK(call) \
 		{ \
@@ -161,6 +177,7 @@ class DTree{
 		
 		/* copy from GPU all the trees holded by the object and print them on the standard output  */
 		__host__ void print(unordered_map<int,string> names);
+		__host__ void free(){CHECK(cudaFree(devData.getPtr()))}
 };
 
 void DTree::print(unordered_map<int,string> names){
@@ -175,6 +192,7 @@ void DTree::print(unordered_map<int,string> names){
 	cout.setf(ios::fixed, ios::floatfield);	
 	cout << endl;
 	for(i=0; i<nTrees; i++){
+		cout<<"tree #"<<i<<endl;
 		ht.setOffs(nNodes, h_replics+(treeSize*i));		
 		for(j=0; j<nNodes; j++){
 			aux = names[j]+"("+to_string(j)+")";
@@ -245,27 +263,35 @@ class HTree: public DTree{
 };
 
 HTree::HTree(int dev_id, string nw_fname, string pt_fname){	
+	void * d_tree;
+	double time_spent;
 	devId = dev_id;
+	nTrees=1;
+	CHECK(cudaSetDevice(devId));
+
+	START_TIMER();
 	newickf.open(nw_fname);
 	FERR(newickf);
 	putf.open(pt_fname);
 	FERR(putf);	
 	string fileLine;
-	vector<string> filePut;	
+	vector<string> filePut;
 	setParams(fileLine,filePut);	
 	hostData.soalloc(nNodes,nInsSpc);
 	treeSize = hostData.getSize(nNodes,nInsSpc);
 	parseTree(fileLine,filePut);
 	newickf.close();
 	putf.close();
-	
-	/* make a copy of the tree on device side */
-	void * d_tree;
-	CHECK(cudaSetDevice(devId));
+	STOP_TIMER(time_spent);
+	cout<<"\ntotal time spent to parse the files: "<<time_spent<<"ms\n";	
+
+	//make a copy of the tree on device side
+	START_TIMER();
 	CHECK(cudaMalloc(&d_tree, treeSize));
 	CHECK(cudaMemcpy(d_tree, hostData.getPtr(), treeSize, cudaMemcpyHostToDevice));
 	devData.setOffs(nNodes, d_tree);
-	nTrees=1;
+	STOP_TIMER(time_spent);
+	cout<<"\ntotal time spent to copy backbone tree to GPU: "<<time_spent<<"ms\n";
 }
 
 bool DTree::compareTo(HTree *h_tree){
@@ -504,8 +530,7 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
   		auxiliar = filePut[linePut];
   		put = ""; 
   		auxiliarGeral = 0;
-  		alphabeticModeOn = false;
- 		
+  		alphabeticModeOn = false; 		
 	    for (int elemenIndex = 0; elemenIndex < auxiliar.length(); elemenIndex++)
 	    {	
 	       if (isspace(auxiliar[elemenIndex]) and alphabeticModeOn) 
@@ -610,65 +635,147 @@ DTree& HTree::gpuRep(int num_reps) const{
 	return *new DTree(nNodes,nInsSpc,idxInsSpc,idxInsAnc,num_reps,treeSize,d_replics);
 }
 
+__global__ void setup_kernel(long long seed, curandState_t* devStates, ushort N){
+	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+	int i;
+    for(i=idx;i<N;i+=gridDim.x+blockDim.x)
+    	curand_init(seed, i, 0, &devStates[i]);
+}
+
 __global__ void insertion(DTree tree, curandState_t* devStates){
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
-	tree.setTreeIdx(idx);
-    curandState state = devStates[idx];    
-    unsigned int i,j,t;
-    int taxon, mdcc;
-    int ancidx; //the put's parent node created to represent the cladogenesis
-    float depth;//depth in wich the put will be inserted down the subtree rooted at mdcc
-    float height = tree.getdRoot(0); //height of the tree (distance from leaf to root)
+	curandState state;
+	unsigned int i,j,t;
+	int taxon, mdcc;
+	//TODO: volatile only for debug purpose
+	volatile int ancidx; 	//the put's parent node created to represent the cladogenesis
+	volatile int grandpa;
+	volatile unsigned int k;
 
-    if (tree.getnInsSpc() > 1) {
-	for (i=0; i<tree.getnInsSpc()-1; i++) {
-		j = i + curand(&state) / (UINT_MAX/(tree.getnInsSpc()-i)+1);
-		t = tree.getInseq(j);
-		tree.setInseq(tree.getInseq(i),j);
-		tree.setInseq(t,i);
-		}
-    }
+	float depth;	//depth in wich the put will be inserted down the subtree rooted at mdcc
+	float height;	//height of the tree (distance from leaf to root)
+	
+	for(k=idx;k<tree.getnTrees();k+=gridDim.x+blockDim.x){
+		tree.setTreeIdx(k);
+	    state = devStates[k];
+	    height = tree.getdRoot(0); //height of the tree (distance from leaf to root)
 
-    float sum;
-    ushort put; //current put going to be inserted
-	for(i=0; i<tree.getnInsSpc(); i++){
-		t = curand(&state);	//path
-		put = tree.getInseq(i);
-		mdcc = tree.getParent(put);	
-		depth = curand_uniform(&state) * (height-tree.getdRoot(mdcc));
-		taxon = mdcc;
-		sum=0;
-		do{		
-			t>>=1;
-			taxon = t&1 ? tree.getlChild(taxon) : tree.getrChild(taxon);
-			sum+= tree.getBranch(taxon);			
-		}while(sum<depth);
-		ancidx = tree.getIdxInsAnc()-(put-tree.getIdxInsSpc());	//calculate corresponding ancestor node
-		if(t&1){	//if came from the left
-			tree.setrChild(put,ancidx);		//put become the right child
-			tree.setlChild(taxon,ancidx);	//the sister clade continue being at left
-			tree.setlChild(ancidx,tree.getParent(taxon));//the put's parent node takes place of the sister's clade side
-		}			
-		else{	//if came from the right
-			tree.setlChild(put,ancidx);		//put become the left child
-			tree.setrChild(taxon,ancidx);	//the sister clade continue being at right
-			tree.setrChild(ancidx,tree.getParent(taxon));//the put's parent node takes place of the sister's clade side
+	    if (tree.getnInsSpc() > 1) {
+		for (i=0; i<tree.getnInsSpc()-1; i++) {
+			j = i + curand(&state) / (UINT_MAX/(tree.getnInsSpc()-i)+1);
+			t = tree.getInseq(j);
+			tree.setInseq(tree.getInseq(i),j);
+			tree.setInseq(t,i);
+			}
+	    }
+	    float sum;
+	    ushort put; //current put going to be inserted
+		for(i=0; i<tree.getnInsSpc(); i++){
+			t = curand(&state);	//path
+			put = tree.getInseq(i);
+			mdcc = tree.getParent(put);	
+			depth = curand_uniform(&state) * (height-tree.getdRoot(mdcc));
+			taxon = mdcc;
+			sum=0;
+			do{		
+				t>>=1;
+				taxon = t&1 ? tree.getlChild(taxon) : tree.getrChild(taxon);
+				sum+= tree.getBranch(taxon);			
+			}while(sum<depth);
+			//after the loop, taxon is the sister clade
+			grandpa = tree.getParent(taxon);
+			ancidx = tree.getIdxInsAnc()-(put-tree.getIdxInsSpc());	//calculate corresponding ancestor node
+			if(t&1){	//if came from the left
+				tree.setrChild(put,ancidx);		//put become the right child
+				tree.setlChild(taxon,ancidx);	//the sister clade continue being at left
+				tree.setlChild(ancidx,grandpa);//the put's parent node takes place of the sister's clade side
+			}			
+			else{	//if came from the right
+				tree.setlChild(put,ancidx);		//put become the left child
+				tree.setrChild(taxon,ancidx);	//the sister clade continue being at right
+				tree.setrChild(ancidx,grandpa);//the put's parent node takes place of the sister's clade side
+			}
+			tree.setParent(grandpa,ancidx);				//set up new ancestor's parent (same of the sister group)
+			tree.setSide(t&1,ancidx);									//set up new ancestor's side (same of the sister group)
+			tree.setParent(ancidx,put);									//set up PUT's parent
+			tree.setSide(!(t&1),put);									//set up PUT's side (the sister's reverse)
+			tree.setParent(ancidx,taxon);								//set up sister's new parent
+			tree.setBranch(tree.getBranch(taxon)-(sum-depth),ancidx);	//set up new ancestor's branch
+			tree.setBranch(sum-depth,taxon);							//set up sister's new branch length
+			tree.setBranch(height-(tree.getdRoot(mdcc)+depth),put);		//set up PUT's branch length
+			tree.setdRoot (tree.getdRoot(grandpa)+tree.getBranch(ancidx),ancidx);	//set up new ancestor's distance to the root
 		}
-		tree.setParent(tree.getParent(taxon),ancidx);				//set up new ancestor's parent (same of the sister group)
-		tree.setSide(t&1,ancidx);									//set up new ancestor's side (same of the sister group)
-		tree.setParent(ancidx,put);									//set up PUT's parent
-		tree.setSide(!(t&1),put);									//set up PUT's side (the sister's reverse)
-		tree.setParent(ancidx,taxon);								//set up sister's new parent
-		tree.setBranch(tree.getBranch(taxon)-(sum-depth),ancidx);	//set up new ancestor's branch
-		tree.setBranch(sum-depth,taxon);							//set up sister's new branch length
-		tree.setBranch(height-(tree.getdRoot(mdcc)+depth),put);		//set up PUT's branch length
-		tree.setdRoot (tree.getdRoot(tree.getParent(ancidx))+tree.getBranch(ancidx),ancidx);	//set up new ancestor's distance to the root
 	}
 }
 
-__global__ void setup_kernel(long long seed, curandState_t* devStates){
-	int idx = blockIdx.x * blockDim.x + threadIdx.x;    
-    curand_init(seed, idx, 0, &devStates[idx]);
+__host__ __device__ int row_index( int i, int M ){ // retorna o indice da linha
+	M--;
+    float m = M;
+    float row = (-2*m - 1 + sqrt( (4*m*(m+1) - 8*(float)i - 7) )) / -2;
+    if( row == (float)(int) row ) row -= 1;
+    return (int) row;
+}
+
+__host__ __device__ int column_index( int i, int M ){ // retorna o indice da coluna
+    int row = row_index( i, M);
+    M--;
+    return 1 + (i - M * row + row*(row+1) / 2);
+}
+
+__global__ void patrix(DTree tree, float* d_matrix){
+
+		tree.setTreeIdx(blockIdx.x);
+		uint idx = threadIdx.x;
+		ushort row, col, taxon;
+		unsigned long long row_bmp, col_bmp; 
+		ushort row_len, col_len;
+		ushort N = tree.getnNodes();
+		ushort nleafs = (N-1)/2;
+		uint msize = nleafs*(nleafs-1)/2;
+
+		extern __shared__ ushort s[];
+
+		ushort *parent = s;
+		ushort *lchild = parent+N;
+		ushort *rchild = lchild+N;
+
+		uint i;
+		for(i=idx;i<N;i+=blockDim.x)
+				parent[i] = tree.getParent(i);
+		for(i=idx;i<N;i+=blockDim.x)
+				lchild[i] = tree.getlChild(i);
+		for(i=idx;i<N;i+=blockDim.x)
+				rchild[i] = tree.getrChild(i);
+
+		__syncthreads();
+
+		for(i=idx;i<msize;i+=blockDim.x){			
+			row=row_index(i,nleafs);
+			col=column_index(i,nleafs);
+			row_bmp=0;
+			col_bmp=0;
+			row_len=0;
+			col_len=0;
+			for(taxon=row; parent[taxon]!=NOPARENT; taxon=parent[taxon]){
+				row_len++;
+				row_bmp<<=1;
+				row_bmp|=tree.getSide(taxon);
+			}
+			for(taxon=col; parent[taxon]!=NOPARENT; taxon=parent[taxon]){
+				col_len++;
+				col_bmp<<=1;
+				col_bmp|=tree.getSide(taxon);
+			}
+			taxon=tree.getnNodes()-1; 	//start with the root
+			if((row_bmp&1)==(col_bmp&1)){	//if the LCA isn't the root
+				do{
+					taxon = row_bmp&1 ? lchild[taxon] : rchild[taxon]; // either row_bmp or col_bmp (same)
+				 	row_bmp>>=1;
+				 	col_bmp>>=1;
+				 }while((row_bmp&1)==(col_bmp&1));
+			}
+			d_matrix[blockIdx.x*msize+i] = tree.getdRoot(row)+tree.getdRoot(col)-2*tree.getdRoot(taxon);
+	}
 }
 
 int main(int argc, char *argv[]){	
@@ -676,10 +783,16 @@ int main(int argc, char *argv[]){
 	if(argc < 2 || argc >3){
 		cout << "Usage: " << argv[0] << " #replications [file]" << endl;
 		exit(EXIT_FAILURE);
-	}	
-	int num_reps = atoi(argv[1]);
+	}
+	
+	double time_spent;
+	int num_reps = atoi(argv[1]);	
 	HTree *tree = argc==3 ? new HTree(0,argv[2]) : new HTree(0);
+	
+	START_TIMER();
 	DTree replics = tree->gpuRep(num_reps);
+	STOP_TIMER(time_spent);
+	cout<<"\ntotal time spent to replicate trees: "<<time_spent<<"ms\n";	
 
 	cout << "nNodes: " << tree->getnNodes() << endl;
 	cout << "nInsSpc: " << tree->getnInsSpc() << endl;
@@ -691,13 +804,43 @@ int main(int argc, char *argv[]){
 	else
 		cout << "Data doesn't match" << endl;
 
-	curandState_t *devStates;	
-	CHECK(cudaMalloc((void**)&devStates, sizeof(curandState_t)*num_reps));	
-	setup_kernel<<<1,num_reps>>>(1,devStates);
-	insertion<<<1,num_reps>>>(replics,devStates);	
-	CHECK(cudaDeviceSynchronize());
-	replics.print(tree->getNames());
-	CHECK(cudaDeviceReset());	
-	exit(EXIT_SUCCESS);
+	curandState_t *devStates;
+
+	cudaDeviceProp device;
+	CHECK(cudaGetDeviceProperties(&device,0));
 	
+	int threads = device.warpSize*16; //threads per block; TODO: FIGURE OUT WHICH MULTIPLE IS THE BEST
+	int blocks = (num_reps + (threads-1)) / threads;
+	dim3 grid(blocks), block(threads);
+	
+	START_TIMER();
+	CHECK(cudaMalloc((void**)&devStates, sizeof(curandState_t)*num_reps));	
+	setup_kernel<<<grid,block>>>(1,devStates,num_reps);
+	insertion<<<grid,block>>>(replics,devStates);	
+	CHECK(cudaDeviceSynchronize());
+	STOP_TIMER(time_spent);
+	cout<<"\ntotal time spent to expand trees: "<<time_spent<<"ms\n";	
+	
+	//replics.print(tree->getNames());
+
+	START_TIMER();
+	float *d_matrix;
+	ushort nleafs = (replics.getnNodes()-1)/2;
+	ushort msize = nleafs*(nleafs-1)/2;
+	CHECK(cudaMalloc((void**)&d_matrix, sizeof(float)*msize*num_reps));
+	patrix<<<num_reps,256,replics.getnNodes()*(sizeof(ushort)*3)>>>(replics, d_matrix);
+	CHECK(cudaDeviceSynchronize());
+	STOP_TIMER(time_spent);
+	cout<<"\ntotal time spent to generate patrixes: "<<time_spent<<"ms\n";	
+
+	//replics.free();
+
+	START_TIMER();
+	float *h_matrix = (float*)malloc(sizeof(float)*msize*num_reps);
+	CHECK(cudaMemcpy(h_matrix, d_matrix, sizeof(float)*msize*num_reps, cudaMemcpyDeviceToHost));
+	STOP_TIMER(time_spent);
+	cout<<"\ntotal time spent to copy patrixes to CPU: "<<time_spent<<"ms\n";	
+
+	CHECK(cudaDeviceReset());
+	exit(EXIT_SUCCESS);	
 }
