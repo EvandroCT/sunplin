@@ -27,6 +27,7 @@
 #include <iomanip>
 #include <sys/time.h>
 
+
 using namespace std;
 
 long long start_time, end_time;
@@ -360,9 +361,9 @@ void HTree::setParams(string &fileLine, vector<string> &filePut){
 void HTree::parseTree(string fileLine, vector<string> filePut) {
 
 	int posParent = -1, posParentFile = -1;
-	string leaf =" ", ancestral =" ", currElement=" ", parent = " "; // salva o atual e o ultimo elemento
+	string leaf =" ", ancestral =" ", currElement=" ", parent = " "; // save the actual and lest element
 	string leftChild=" ", rightChild= " ", comprimeRamoLeft ="", comprimeRamoRight = "";
-	int auxiliarNumNos =0, auxiliarGeral =0, auxilarPreencherVetor =0; // usado para fazer as trocas de elementos no vetor
+	int auxiliarNumNos =0, auxiliarGeral =0, auxilarPreencherVetor =0; 
 	int indexleftChild =-1, indexrightChild =-1, indexStartReplace = -1;
 	bool alphabeticModeOn = false; 
 	
@@ -371,7 +372,7 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
 	
 	smatch m;
   	regex e ("\\([^()]+\\)");
-  	regex folhas("\\([A-z0-9_+.#]+|,[A-z0-9_+.#]+"); // achar todas as folhas e separar no vetor
+  	regex folhas("\\([A-z0-9_+.#]+|,[A-z0-9_+.#]+"); // find all leafs and separe it in the vector 
   	regex internos("\\)[A-z0-9_+.#]+|\\)[:;]");
 
   	// fill empty names
@@ -397,12 +398,12 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
 		setBranch(0,i);
 		setdRoot(0,i);		
 	}
-  	// preencher vetor com todas as species
-	// usando o regex para pegar todos os folhas
+  	// fill up vector with all species 
+	// using regex to get all leafs 
 	string copyNewick = fileLine;
 	while (std::regex_search (copyNewick,m,folhas)) {		
 	    for (int i=0; i<m.size(); ++i) {
-	    	auxiliarGeral = m.position(i)+1; // posicão do match (sem o '(' ou ',')
+	    	auxiliarGeral = m.position(i)+1; // match position  (without the '(' or ',')
 	    	leaf = copyNewick[auxiliarGeral++];	    	
 	    	while(copyNewick[auxiliarGeral]!=':')
 	    		leaf += copyNewick[auxiliarGeral++];	    	
@@ -410,8 +411,8 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
 		setName(leaf,auxilarPreencherVetor++);
 	    copyNewick = m.suffix().str();
   	}
-  	// preencher vetor com todas as species
-	// usando o regex para pegar todos os nos internos	
+  	// fill up the vector with all speciesp
+	// using regex to get all inter nodes 
 	auxilarPreencherVetor = quantFolhas + (nInsSpc * 2) + 1;
 	copyNewick = fileLine;
 	while (std::regex_search (copyNewick,m,internos)) {
@@ -419,7 +420,7 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
 		ancestral = "";
 	    for (int i=0; i<m.size(); ++i) {
 
-	    	auxiliarGeral = m.position(i) +1; // posicão do match
+	    	auxiliarGeral = m.position(i) +1; // match position
 		    while(copyNewick[auxiliarGeral]!=':' && copyNewick[auxiliarGeral]!=';') {
 		    	ancestral += copyNewick[auxiliarGeral++];	    			
 		    }		    
@@ -428,19 +429,13 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
   		auxilarPreencherVetor++;
 	    copyNewick = m.suffix().str();
   	}  	  	 
-  	setParent(NOPARENT,nNodes-1); // no raiz não tem um pai
+  	setParent(NOPARENT,nNodes-1); // root doesn't have father
   	
-	// logica se da no principio de achar todos os nos folhas pares, em cada loop, dai verificamos o seu devido pai
-	// e os "eliminamos" da arvore, criando novos filhos folhas.
-	// Para isso, estamos usando a biblioteca Redex, para achar os matchs e fazer o replace em seguida.
+	// using regex logic to get exactly what we need
 	// links: http://www.cplusplus.com/reference/regex/regex_search/
 	//		  http://www.cplusplus.com/reference/regex/match_results/position/
 	//        http://www.cplusplus.com/reference/regex/regex_replace/
-	
-	
-	//regex logica
-	// enquanto tivermos nos para buscar, vamos tirar as folhas
-	// sobrara no final apenas o pai raiz
+
  
 	int numTotalNos = nNodes-(2*nInsSpc)-1; 
 
@@ -452,7 +447,7 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
 		comprimeRamoRight = "";
 		std::regex_search ( fileLine, m, e );
     	
-    	currElement = fileLine[m.position(0)]; // primeiro paranteses dos nos folhas achados    	
+    	currElement = fileLine[m.position(0)];   	
     	auxiliarGeral = m.position(0);
     	indexStartReplace = m.position(0);
 
@@ -470,7 +465,7 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
     		if(fileLine[auxiliarGeral]!=' ') comprimeRamoRight += fileLine[auxiliarGeral];
 
 	    auxiliarGeral++;
-    	posParentFile = auxiliarGeral;	// a posição do pai daqueles filhos, que esta logo apos fechar o parenteses  	
+    	posParentFile = auxiliarGeral;	// The position of the children 	
 
     	/* fetch name of the internal node (until ':') or of the root (until ';') */
     	parent="";
@@ -478,11 +473,11 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
 	    	parent += fileLine[auxiliarGeral++];	    			
 	    }	 
 
-  		// achar o index entao dos filhos tirados e do pai
+  		// find the index of the children, removing the index of the father
     	for(int i=0; i<nNodes; i++){
     		if(name[i] == parent){
     			posParent = i;
-    			if( (indexleftChild != -1) and (indexrightChild != -1) ) break; // parar se ja achou indexes
+    			if( (indexleftChild != -1) and (indexrightChild != -1) ) break; // stop if index found it
     		}
     		else if(name[i]==rightChild){    			
     			indexrightChild = i;
@@ -493,36 +488,36 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
     			if( (indexrightChild != -1) and (posParent != -1) ) break;
     		}
     	}
-    	// preencher vetores
+    	// fill up vetores
     	setParent(posParent,indexleftChild);
     	setSide(1,indexleftChild);
     	setParent(posParent,indexrightChild);
     	setSide(0,indexrightChild);
     	setlChild(indexleftChild,posParent);
     	setrChild(indexrightChild,posParent);
-    	// comprimento do ramo
+    	// lenght of the node
     	try{
 	    	setBranch(atof(comprimeRamoRight.c_str()),indexrightChild);
 	    	setBranch(atof(comprimeRamoLeft.c_str()),indexleftChild);
     	}catch(exception e){
 
     	}
-	  	// fazer o replace dos elementos retirado
+	  	// replace the elements removed
 	  	for (int i = indexStartReplace ; i < posParentFile; i++)
 	  	{
 	  		fileLine[i] = ' ';	  		
 	  	}
 	  	posParent = -1;
-	  	// reset variaveis
+	  	// reset values
   		rightChild = "";
   		leftChild = "";
   		comprimeRamoLeft = "";
   		comprimeRamoRight = "";
   		indexrightChild = -1;
   		indexleftChild = -1;
-		auxiliarNumNos = auxiliarNumNos + 2; // ou seja, foi retirado 2 filhos
+		auxiliarNumNos = auxiliarNumNos + 2; // took of 2 kids(nodes)
 	}
-	 // preencher novos put
+	 // fill up new  puts
  	string auxiliarPut[2], auxiliar, put;
 
   	for (int linePut = 0; linePut < nInsSpc; linePut++)
@@ -548,7 +543,7 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
 	    if(put != ""){
 	    	auxiliarPut[auxiliarGeral] = put;
 	    }
-	    //insert no array especies
+	    //insert in the species array
 	    setName(auxiliarPut[0],quantFolhas+linePut);
 	    for (int index = 0; index < nNodes; index++)
 	    {
@@ -561,57 +556,45 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
 	    	}
 	    }	
   	} 
-	// Calcular comprimento do ramo ate a raiz
-	// usando busca em profundidade
+	// calculate the lenght of the node until root 
 	bool folhaDone = false;
 	int visited=0;
 	setBranch(0,nNodes-1);	//root has no branch
 	setdRoot(0,nNodes-1); 	//root has no distance to himself
 	int posRamo = getrChild(nNodes-1);//start with the root's right child;
 	while(visited<quantFolhas*2-2){	
-		// primeiramente, faz uma busca profunda, pela esquerda(mas na vdd tanto faz), e busca um no leaf
-		// com isso, sabemos a profundidade de todos os outros folhas, restando então apenas os nos internos
-		// essa regra se aplica apenas para arvores filogeneticas
+		
 		while(not folhaDone){
 			setdRoot(getdRoot(getParent(posRamo))+getBranch(posRamo),posRamo);
-			if(getrChild(posRamo) == NOCHILD){ // ou seja, não tem filho(leaf)
+			if(getrChild(posRamo) == NOCHILD){ 
 				folhaDone = true;
-				// temos então o comprimento de todos os folhas da arvore
-				// atualizar de todas as folhas então				
+								
 				for (int i = 0; i < quantFolhas + nInsSpc; i++)
 				{
 					setdRoot(getdRoot(posRamo),i);
 				}
 				visited+= quantFolhas;
-				posRamo = getParent(posRamo); // volta entao a posição ramo 1 posição, pois chegou no limite da arvore(leaf)				
+				posRamo = getParent(posRamo); 				
 				break;
 			}
 			visited++;
-			posRamo = getrChild(posRamo); // proximo filho a direita
+			posRamo = getrChild(posRamo); 
 		}		
-		// fazer a busca em profundidade agr para os nos internos
-		// se os dois filhos da raiz, ja tiverem seus comprimentos achados,
-		// entao significa q a busca em profundidade foi concluida
+		
 
-		// cheka se elemento atual ainda tem filho 
 		if(getrChild(posRamo)!=NOCHILD){
-			// se tiver filho da direita e o comp dele ainda n foi calculado
 			if(getdRoot(getrChild(posRamo))==0){
-				// nova posRamo é entao aquele filho da direita
 				visited++;
 				posRamo = getrChild(posRamo);
 				setdRoot(getdRoot(getParent(posRamo))+getBranch(posRamo),posRamo);
 			}
-			 // se tiver filho da esquerda e o comp dele ainda n foi calculado
 			else if(getdRoot(getlChild(posRamo))==0){
-				// nova posRamo é entao aquele filho da direita
 				visited++;
 				posRamo = getlChild(posRamo);
 				setdRoot(getdRoot(getParent(posRamo))+getBranch(posRamo),posRamo);
 			}
-			// ou seja, aquela sub arvore esta concluida
 			else{				
-				posRamo = getParent(posRamo); // volta entao a posição ramo 1 posição, pois chegou no limite da arvore(leaf)	
+				posRamo = getParent(posRamo); 	
 			}	
 		}
 	}
