@@ -80,41 +80,41 @@ class SoaTree {
 		float	*dRoot;		// distances between nodes and root (sum of the paths' branches)
 		ushort	*inseq;		// vector with the sequence of indices of puts to be inserted
 	public:
-		__host__ SoaTree() = default;		
-		__host__ SoaTree(int num_nodes, int num_ins) {soalloc(num_nodes,num_ins);}
-		__host__ SoaTree(int num_nodes, void* base) {setOffs(num_nodes,base);}
-		__host__ __device__ void* getPtr() const {return (void*) parent;}
-		__host__ __device__ void setOffs(int num_nodes, void* base);	//set pointers' offsets starting on base accordingly to data structure, # nodes and # insertions
-		__host__ void setOffs(int num_nodes) {setOffs(num_nodes, parent);}  //set pointers' offsets starting on the first array accordingly to data structure, # nodes and # insertions 
-		__host__ static size_t getSize(int num_nodes, int num_ins)
+		__noinline__ __host__ SoaTree() = default;
+		__noinline__ __host__ SoaTree(int num_nodes, int num_ins) {soalloc(num_nodes,num_ins);}
+		__noinline__ __host__ SoaTree(int num_nodes, void* base) {setOffs(num_nodes,base);}
+		__noinline__ __host__ __device__ void* getPtr() const {return (void*) parent;}
+		__noinline__ __host__ __device__ void setOffs(int num_nodes, void* base);	//set pointers' offsets starting on base accordingly to data structure, # nodes and # insertions
+		__noinline__ __host__ void setOffs(int num_nodes) {setOffs(num_nodes, parent);}  //set pointers' offsets starting on the first array accordingly to data structure, # nodes and # insertions
+		__noinline__ __host__ static size_t getSize(int num_nodes, int num_ins)
 		{
 			size_t size = (3*sizeof(ushort) + 2*sizeof(float))*num_nodes + sizeof(ushort)*num_ins; //minimal amount of bytes needed to represent the tree 
 			int r = size%sizeof(int4);
 			size += r ? sizeof(int4)-r : 0;	//size of the tree padded to a multiple of sizeof(int4) (due to a GPU memory aligment requisite)
 			return size;
 		}
-		__host__ void soalloc(int num_nodes, int num_ins)
+		__noinline__ __host__ void soalloc(int num_nodes, int num_ins)
 		{
 			void *ptr = malloc(getSize(num_nodes, num_ins));
 			memset(ptr,0,getSize(num_nodes, num_ins));
 			setOffs(num_nodes, ptr);
 		}
 
-		__host__ __device__ ushort	getParent	(int i) const {return parent[i].idx;}
-		__host__ __device__ ushort	getSide		(int i) const {return parent[i].side;}
-		__host__ __device__ ushort	getlChild	(int i) const {return lChild[i];}
-		__host__ __device__ ushort	getrChild	(int i) const {return rChild[i];}
-		__host__ __device__ ushort 	getInseq	(int i) const {return inseq[i];}
-		__host__ __device__ float 	getBranch	(int i) const {return branch[i];}
-		__host__ __device__ float	getdRoot	(int i) const {return dRoot[i];}
+		__noinline__ __host__ __device__ ushort	getParent	(int i) const {return parent[i].idx;}
+		__noinline__ __host__ __device__ ushort	getSide		(int i) const {return parent[i].side;}
+		__noinline__ __host__ __device__ ushort	getlChild	(int i) const {return lChild[i];}
+		__noinline__ __host__ __device__ ushort	getrChild	(int i) const {return rChild[i];}
+		__noinline__ __host__ __device__ ushort 	getInseq	(int i) const {return inseq[i];}
+		__noinline__ __host__ __device__ float 	getBranch	(int i) const {return branch[i];}
+		__noinline__ __host__ __device__ float	getdRoot	(volatile int i) const {return dRoot[i];}
 
-		__host__ __device__ void setParent	(ushort	val, int i)	{parent[i].idx	= val;}
-		__host__ __device__ void setSide	(ushort	val, int i)	{parent[i].side	= val;}
-		__host__ __device__ void setlChild	(ushort	val, int i)	{lChild[i]		= val;}
-		__host__ __device__ void setrChild	(ushort	val, int i)	{rChild[i]		= val;}
-		__host__ __device__ void setBranch	(float	val, int i)	{branch[i]		= val;}
-		__host__ __device__ void setdRoot	(float	val, int i)	{dRoot[i]		= val;}
-		__host__ __device__ void setInseq	(ushort	val, int i)	{inseq[i]		= val;}
+		__noinline__ __host__ __device__ void setParent	(ushort	val, int i)	{parent[i].idx	= val;}
+		__noinline__ __host__ __device__ void setSide	(ushort	val, int i)	{parent[i].side	= val;}
+		__noinline__ __host__ __device__ void setlChild	(ushort	val, int i)	{lChild[i]		= val;}
+		__noinline__ __host__ __device__ void setrChild	(ushort	val, int i)	{rChild[i]		= val;}
+		__noinline__ __host__ __device__ void setBranch	(float	val, int i)	{branch[i]		= val;}
+		__noinline__ __host__ __device__ void setdRoot	(float	val, int i)	{dRoot[i]		= val;}
+		__noinline__ __host__ __device__ void setInseq	(ushort	val, int i)	{inseq[i]		= val;}
 };
 
 void SoaTree::setOffs(int num_nodes, void* base) {
@@ -138,9 +138,9 @@ class DTree{
 		size_t treeSize;	// size of one tree padded to multiple of sizeof(int4) (due to a GPU memory aligment requisite)
 		SoaTree devData;	// struct of arrays to hold trees' data
 	public:
-		__host__ bool compareTo(HTree *h_tree);
-		__host__ DTree() = default;
-		__host__ DTree(int nNodes, int nInsSpc, int idxInsSpc, int idxInsAnc, int nTrees, size_t treeSize, void* ptr):
+		__noinline__ __host__ bool compareTo(HTree *h_tree);
+		__noinline__ __host__ DTree() = default;
+		__noinline__ __host__ DTree(int nNodes, int nInsSpc, int idxInsSpc, int idxInsAnc, int nTrees, size_t treeSize, void* ptr):
 						nNodes(nNodes),
 						nInsSpc(nInsSpc),
 						idxInsSpc(idxInsSpc), 
@@ -149,35 +149,36 @@ class DTree{
 						treeSize(treeSize){devData.setOffs(nNodes,ptr);}
 		
 		/* TODO: THROW OVER/UNDERFLOW EXCEPTION */
-		__host__ __device__ ushort	getnNodes	()		const {return nNodes;}
-		__host__ __device__ ushort	getnInsSpc	()		const {return nInsSpc;}
-		__host__ __device__ ushort	getIdxInsSpc()		const {return idxInsSpc;}
-		__host__ __device__ ushort	getIdxInsAnc()		const {return idxInsAnc;}
-		__host__ __device__ uint	getnTrees	()		const {return nTrees;}
-		__host__ __device__ size_t	getSize		()		const {return treeSize;};
+		__noinline__ __host__ __device__ ushort	getnNodes	()		const {return nNodes;}
+		__noinline__ __host__ __device__ ushort	getnInsSpc	()		const {return nInsSpc;}
+		__noinline__ __host__ __device__ ushort	getIdxInsSpc()		const {return idxInsSpc;}
+		__noinline__ __host__ __device__ ushort	getIdxInsAnc()		const {return idxInsAnc;}
+		__noinline__ __host__ __device__ uint	getnTrees	()		const {return nTrees;}
+		__noinline__ __host__ __device__ size_t	getSize		()		const {return treeSize;};
 
-		__host__ __device__ ushort	getParent	(int i)	const {return devData.getParent(i);}
-		__host__ __device__ ushort	getSide		(int i)	const {return devData.getSide(i);}
-		__host__ __device__ ushort	getlChild	(int i)	const {return devData.getlChild(i);}
-		__host__ __device__ ushort	getrChild	(int i)	const {return devData.getrChild(i);}
-		__host__ __device__ float	getBranch	(int i)	const {return devData.getBranch(i);}
-		__host__ __device__	float	getdRoot	(int i) const {return devData.getdRoot(i);}
-		__host__ __device__ ushort	getInseq	(int i)	const {return devData.getInseq(i);}
+		__noinline__ __host__ __device__ ushort	getParent	(int i)	const {return devData.getParent(i);}
+		__noinline__ __host__ __device__ ushort	getSide		(int i)	const {return devData.getSide(i);}
+		__noinline__ __host__ __device__ ushort	getlChild	(int i)	const {return devData.getlChild(i);}
+		__noinline__ __host__ __device__ ushort	getrChild	(int i)	const {return devData.getrChild(i);}
+		__noinline__ __host__ __device__ float	getBranch	(int i)	const {return devData.getBranch(i);}
+		__noinline__ __host__ __device__	float	getdRoot	(int i) const {return devData.getdRoot(i);}
+		__noinline__ __host__ __device__ ushort	getInseq	(int i)	const {return devData.getInseq(i);}
 
-		__device__ void	setTreeIdx(int i){devData.setOffs(nNodes,devData.getPtr()+treeSize*i);}
+		__noinline__ __device__ void	setTreeIdx(int i){devData.setOffs(nNodes,devData.getPtr()+treeSize*i);}
 
 		/* TODO: THROW OVER/UNDERFLOW EXCEPTION */
-		__device__ void	setParent	(ushort	val, int i)	{devData.setParent(val,i);}
-		__device__ void	setSide		(ushort	val, int i)	{devData.setSide(val,i);}
-		__device__ void	setlChild	(ushort	val, int i)	{devData.setlChild(val,i);}
-		__device__ void	setrChild	(ushort	val, int i)	{devData.setrChild(val,i);}
-		__device__ void	setBranch	(float	val, int i)	{devData.setBranch(val,i);}
-		__device__ void	setdRoot	(float	val, int i)	{devData.setdRoot(val,i);}
-		__device__ void	setInseq	(ushort	val, int i)	{devData.setInseq(val,i);}		
+		__noinline__ __device__ void	setParent	(ushort	val, int i)	{devData.setParent(val,i);}
+		__noinline__ __device__ void	setSide		(ushort	val, int i)	{devData.setSide(val,i);}
+		__noinline__ __device__ void	setlChild	(ushort	val, int i)	{devData.setlChild(val,i);}
+		__noinline__ __device__ void	setrChild	(ushort	val, int i)	{devData.setrChild(val,i);}
+		__noinline__ __device__ void	setBranch	(float	val, int i)	{devData.setBranch(val,i);}
+		__noinline__ __device__ void	setdRoot	(float	val, int i)	{devData.setdRoot(val,i);}
+		__noinline__ __device__ void	setInseq	(ushort	val, int i)	{devData.setInseq(val,i);}
 		
 		/* copy from GPU all the trees holded by the object and print them on the standard output  */
-		__host__ void print(unordered_map<int,string> names);
-		__host__ void free(){CHECK(cudaFree(devData.getPtr()))}
+		__noinline__ __host__ void print(unordered_map<int,string> names);
+		__noinline__ __host__ void print(unordered_map<int,string> names, int i);
+		__noinline__ __host__ void free(){CHECK(cudaFree(devData.getPtr()))}
 };
 
 void DTree::print(unordered_map<int,string> names){
@@ -226,6 +227,51 @@ void DTree::print(unordered_map<int,string> names){
 	}
 }
 
+void DTree::print(unordered_map<int,string> names, int i){
+
+	size_t rep_size = treeSize*nTrees;
+	void* h_replics = malloc(rep_size);
+	CHECK(cudaMemcpy(h_replics, devData.getPtr(), rep_size, cudaMemcpyDeviceToHost));
+	SoaTree ht;
+	string aux;
+	int j;
+	cout.precision(4);
+	cout.setf(ios::fixed, ios::floatfield);
+	cout << endl;
+	cout<<"tree #"<<i<<endl;
+	ht.setOffs(nNodes, h_replics+(treeSize*i));
+	for(j=0; j<nNodes; j++){
+		aux = names[j]+"("+to_string(j)+")";
+		cout << left << setw (35) << aux;
+	}
+	cout << endl;
+	for(j=0; j<nNodes; j++) {
+		aux = ht.getParent(j)!=NOPARENT ? names[ht.getParent(j)]+"("+to_string(ht.getParent(j))+")" : "-1";
+		cout << left << setw (35) << aux;
+	}
+	cout << endl;
+	for(j=0; j<nNodes; j++) {
+		aux = ht.getSide(j)==1 ? "left" : "right";
+		cout << left << setw (35) << aux;
+	}
+	cout << endl;
+	for(j=0; j<nNodes; j++) {
+		aux = ht.getlChild(j)!=NOCHILD ? names[ht.getlChild(j)]+"("+to_string(ht.getlChild(j))+")" : "-2";
+		cout << left << setw (35) << aux;
+	}
+	cout << endl;
+	for(j=0; j<nNodes; j++) {
+		aux = ht.getrChild(j)!=NOCHILD ? names[ht.getrChild(j)]+"("+to_string(ht.getrChild(j))+")" : "-2";
+		cout << left << setw (35) << aux;
+	}
+	cout << endl;
+	for(j=0; j<nNodes; j++) cout << left << setw (35) << ht.getBranch(j); cout << endl;
+	for(j=0; j<nNodes; j++) cout << left << setw (35) << ht.getdRoot(j); cout << endl;
+	for(j=0; j<nInsSpc; j++)cout << names[ht.getInseq(j)] << "("<< ht.getInseq(j) <<") ";
+	cout << endl << endl;
+
+}
+
 class HTree: public DTree{	
 	private:
 		SoaTree hostData;					// struct of arrays to hold the trees' data 		
@@ -233,33 +279,33 @@ class HTree: public DTree{
 		ifstream newickf;					// stream object to manage input newick file
 		ifstream putf;						// stream object to manage input PUT file
 		int devId;							// id of the GPU where lies the tree 
-		__host__ void setParams(string &fileLine, vector<string> &filePut);
-		__host__ void parseTree(string fileLine, vector<string> filePut);
+		__noinline__ __host__ void setParams(string &fileLine, vector<string> &filePut);
+		__noinline__ __host__ void parseTree(string fileLine, vector<string> filePut);
 	public:
-		__host__ HTree() = default;
-		__host__ HTree(int dev_id=0, string nw_fname = "newick.tree", string pt_fname="put.list");
-		__host__ DTree& gpuRep(int num_reps) const;
+		__noinline__ __host__ HTree() = default;
+		__noinline__ __host__ HTree(int dev_id=0, string nw_fname = "newick.tree", string pt_fname="put.list");
+		__noinline__ __host__ DTree& gpuRep(int num_reps) const;
 		
 		/* TODO: THROW OVER/UNDERFLOW EXCEPTION */		
-		__host__ void setParent (int 	val, int i)	{hostData.setParent(val,i);}
-		__host__ void setSide	(int 	val, int i)	{hostData.setSide(val,i);}
-		__host__ void setlChild (int 	val, int i)	{hostData.setlChild(val,i);}
-		__host__ void setrChild (int 	val, int i)	{hostData.setrChild(val,i);}
-		__host__ void setBranch (float 	val, int i)	{hostData.setBranch(val,i);}
-		__host__ void setdRoot  (float 	val, int i) {hostData.setdRoot(val,i);}
-		__host__ void setInseq 	(int 	val, int i) {hostData.setInseq(val,i);}
-		__host__ void setName 	(string val, int i) {name[i]=val;}		
+		__noinline__ __host__ void setParent (int 	val, int i)	{hostData.setParent(val,i);}
+		__noinline__ __host__ void setSide	(int 	val, int i)	{hostData.setSide(val,i);}
+		__noinline__ __host__ void setlChild (int 	val, int i)	{hostData.setlChild(val,i);}
+		__noinline__ __host__ void setrChild (int 	val, int i)	{hostData.setrChild(val,i);}
+		__noinline__ __host__ void setBranch (float 	val, int i)	{hostData.setBranch(val,i);}
+		__noinline__ __host__ void setdRoot  (float 	val, int i) {hostData.setdRoot(val,i);}
+		__noinline__ __host__ void setInseq 	(int 	val, int i) {hostData.setInseq(val,i);}
+		__noinline__ __host__ void setName 	(string val, int i) {name[i]=val;}
 		
 		/* TODO: THROW OVER/UNDERFLOW EXCEPTION */
-		__host__ ushort	getParent	(int i) const	{return hostData.getParent(i);}
-		__host__ ushort	getSide		(int i) const	{return hostData.getSide(i);}
-		__host__ ushort	getlChild	(int i) const	{return hostData.getlChild(i);}
-		__host__ ushort	getrChild	(int i) const 	{return hostData.getrChild(i);}
-		__host__ float	getBranch	(int i) const 	{return hostData.getBranch(i);}
-		__host__ float	getdRoot	(int i) const 	{return hostData.getdRoot(i);}
-		__host__ ushort	getInseq	(int i) const 	{return hostData.getInseq(i);}
-		__host__ string	getName		(int i)			{return name[i];}
-		__host__ unordered_map<int, string> getNames(){return name;}
+		__noinline__ __host__ ushort	getParent	(int i) const	{return hostData.getParent(i);}
+		__noinline__ __host__ ushort	getSide		(int i) const	{return hostData.getSide(i);}
+		__noinline__ __host__ ushort	getlChild	(int i) const	{return hostData.getlChild(i);}
+		__noinline__ __host__ ushort	getrChild	(int i) const 	{return hostData.getrChild(i);}
+		__noinline__ __host__ float	getBranch	(int i) const 	{return hostData.getBranch(i);}
+		__noinline__ __host__ float	getdRoot	(int i) const 	{return hostData.getdRoot(i);}
+		__noinline__ __host__ ushort	getInseq	(int i) const 	{return hostData.getInseq(i);}
+		__noinline__ __host__ string	getName		(int i)			{return name[i];}
+		__noinline__ __host__ unordered_map<int, string> getNames(){return name;}
 };
 
 HTree::HTree(int dev_id, string nw_fname, string pt_fname){	
@@ -638,24 +684,25 @@ DTree& HTree::gpuRep(int num_reps) const{
 __global__ void setup_kernel(long long seed, curandState_t* devStates, ushort N){
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	int i;
-    for(i=idx;i<N;i+=gridDim.x+blockDim.x)
+    for(i=idx;i<N;i+=gridDim.x*blockDim.x)
     	curand_init(seed, i, 0, &devStates[i]);
 }
 
-__global__ void insertion(DTree tree, curandState_t* devStates){
+__global__ void insertion(DTree tree2, curandState_t* devStates){
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	curandState state;
 	unsigned int i,j,t;
 	int taxon, mdcc;
 	//TODO: volatile only for debug purpose
-	volatile int ancidx; 	//the put's parent node created to represent the cladogenesis
-	volatile int grandpa;
-	volatile unsigned int k;
+	int ancidx; 	//the put's parent node created to represent the cladogenesis
+	int grandpa;
+	unsigned int k;
 
-	float depth;	//depth in wich the put will be inserted down the subtree rooted at mdcc
+	float depth;	//depth in which the put will be inserted down the subtree rooted at mdcc
 	float height;	//height of the tree (distance from leaf to root)
 	
-	for(k=idx;k<tree.getnTrees();k+=gridDim.x+blockDim.x){
+	for(k=idx;k<tree2.getnTrees();k+=gridDim.x*blockDim.x){	
+		DTree tree = tree2;
 		tree.setTreeIdx(k);
 	    state = devStates[k];
 	    height = tree.getdRoot(0); //height of the tree (distance from leaf to root)
@@ -684,7 +731,7 @@ __global__ void insertion(DTree tree, curandState_t* devStates){
 			}while(sum<depth);
 			//after the loop, taxon is the sister clade
 			grandpa = tree.getParent(taxon);
-			ancidx = tree.getIdxInsAnc()-(put-tree.getIdxInsSpc());	//calculate corresponding ancestor node
+			ancidx = tree.getIdxInsAnc()-(put-tree.getIdxInsSpc());	//calculate corresponding ancestor node		
 			if(t&1){	//if came from the left
 				tree.setrChild(put,ancidx);		//put become the right child
 				tree.setlChild(taxon,ancidx);	//the sister clade continue being at left
@@ -695,16 +742,19 @@ __global__ void insertion(DTree tree, curandState_t* devStates){
 				tree.setrChild(taxon,ancidx);	//the sister clade continue being at right
 				tree.setrChild(ancidx,grandpa);//the put's parent node takes place of the sister's clade side
 			}
+			if(grandpa==NOCHILD) printf("grandpa");
 			tree.setParent(grandpa,ancidx);				//set up new ancestor's parent (same of the sister group)
 			tree.setSide(t&1,ancidx);									//set up new ancestor's side (same of the sister group)
+			if(ancidx==NOCHILD) printf("ancidx");
 			tree.setParent(ancidx,put);									//set up PUT's parent
 			tree.setSide(!(t&1),put);									//set up PUT's side (the sister's reverse)
+			if(ancidx==NOCHILD) printf("ancidx");
 			tree.setParent(ancidx,taxon);								//set up sister's new parent
 			tree.setBranch(tree.getBranch(taxon)-(sum-depth),ancidx);	//set up new ancestor's branch
 			tree.setBranch(sum-depth,taxon);							//set up sister's new branch length
 			tree.setBranch(height-(tree.getdRoot(mdcc)+depth),put);		//set up PUT's branch length
 			tree.setdRoot (tree.getdRoot(grandpa)+tree.getBranch(ancidx),ancidx);	//set up new ancestor's distance to the root
-		}
+		}	
 	}
 }
 
@@ -739,7 +789,7 @@ __global__ void patrix(DTree tree, float* d_matrix){
 		ushort *lchild = parent+N;
 		ushort *rchild = lchild+N;
 
-		uint i;
+		volatile uint i;
 		for(i=idx;i<N;i+=blockDim.x)
 				parent[i] = tree.getParent(i);
 		for(i=idx;i<N;i+=blockDim.x)
@@ -749,7 +799,8 @@ __global__ void patrix(DTree tree, float* d_matrix){
 
 		__syncthreads();
 
-		for(i=idx;i<msize;i+=blockDim.x){			
+		for(i=idx;i<msize;i+=blockDim.x)
+		{
 			row=row_index(i,nleafs);
 			col=column_index(i,nleafs);
 			row_bmp=0;
@@ -768,8 +819,14 @@ __global__ void patrix(DTree tree, float* d_matrix){
 			}
 			taxon=tree.getnNodes()-1; 	//start with the root
 			if((row_bmp&1)==(col_bmp&1)){	//if the LCA isn't the root
+
+				printf("\nrow=%d, col=%d\n",row,col);
+
+				printf("\nrow_bmp=%llu, col_bmp=%llu\n",row_bmp, col_bmp);
+
 				do{
 					taxon = row_bmp&1 ? lchild[taxon] : rchild[taxon]; // either row_bmp or col_bmp (same)
+					printf("taxon: %d\n",taxon);
 				 	row_bmp>>=1;
 				 	col_bmp>>=1;
 				 }while((row_bmp&1)==(col_bmp&1));
@@ -785,10 +842,12 @@ int main(int argc, char *argv[]){
 		exit(EXIT_FAILURE);
 	}
 	
+	int gpu=0;
 	double time_spent;
 	int num_reps = atoi(argv[1]);	
-	HTree *tree = argc==3 ? new HTree(0,argv[2]) : new HTree(0);
+	HTree *tree = argc==3 ? new HTree(gpu,argv[2]) : new HTree(gpu);
 	
+	CHECK(cudaSetDevice(gpu));
 	START_TIMER();
 	DTree replics = tree->gpuRep(num_reps);
 	STOP_TIMER(time_spent);
@@ -807,7 +866,7 @@ int main(int argc, char *argv[]){
 	curandState_t *devStates;
 
 	cudaDeviceProp device;
-	CHECK(cudaGetDeviceProperties(&device,0));
+	CHECK(cudaGetDeviceProperties(&device,gpu));
 	
 	int threads = device.warpSize*16; //threads per block; TODO: FIGURE OUT WHICH MULTIPLE IS THE BEST
 	int blocks = (num_reps + (threads-1)) / threads;
@@ -816,13 +875,14 @@ int main(int argc, char *argv[]){
 	START_TIMER();
 	CHECK(cudaMalloc((void**)&devStates, sizeof(curandState_t)*num_reps));	
 	setup_kernel<<<grid,block>>>(1,devStates,num_reps);
+	CHECK(cudaDeviceSynchronize());
 	insertion<<<grid,block>>>(replics,devStates);	
 	CHECK(cudaDeviceSynchronize());
 	STOP_TIMER(time_spent);
 	cout<<"\ntotal time spent to expand trees: "<<time_spent<<"ms\n";	
 	
 	//replics.print(tree->getNames());
-
+/*
 	START_TIMER();
 	float *d_matrix;
 	ushort nleafs = (replics.getnNodes()-1)/2;
@@ -833,14 +893,14 @@ int main(int argc, char *argv[]){
 	STOP_TIMER(time_spent);
 	cout<<"\ntotal time spent to generate patrixes: "<<time_spent<<"ms\n";	
 
-	//replics.free();
+	replics.free();
 
 	START_TIMER();
 	float *h_matrix = (float*)malloc(sizeof(float)*msize*num_reps);
 	CHECK(cudaMemcpy(h_matrix, d_matrix, sizeof(float)*msize*num_reps, cudaMemcpyDeviceToHost));
 	STOP_TIMER(time_spent);
 	cout<<"\ntotal time spent to copy patrixes to CPU: "<<time_spent<<"ms\n";	
-
+*/
 	CHECK(cudaDeviceReset());
 	exit(EXIT_SUCCESS);	
 }
