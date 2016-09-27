@@ -180,7 +180,107 @@ class DTree{
 		__host__ void print(unordered_map<int,string> names);
 		__host__ void print(unordered_map<int,string> names, int i);
 		__host__ void free(){CHECK(cudaFree(devData.getPtr()))}
+		__noinline__ __host__ void toNewick(unordered_map<int,string> names);
+		__noinline__ __host__ string calculateNewick(unordered_map<int,string> names,  SoaTree ht, int idRaiz);
+		__noinline__ __host__ void newickToFile(string newick);
+
 };
+
+void DTree::toNewick(unordered_map<int,string> names){ 
+
+	size_t rep_size = treeSize*nTrees;	
+	void* h_replics = malloc(rep_size);
+	CHECK(cudaMemcpy(h_replics, devData.getPtr(), rep_size, cudaMemcpyDeviceToHost));	
+	SoaTree ht;
+	int indexThree;
+	string  newickFile="";
+	cout<<nTrees<<endl;
+	for(indexThree=0; indexThree<nTrees; indexThree++){ // total of threes
+		ht.setOffs(nNodes, h_replics+(treeSize*indexThree));// get the pointer set for a tree i
+		// Ainda precisa resetar as variaveis str para cada nova interação
+		newickFile += "#";
+		newickFile += to_string(indexThree +1);
+		newickFile += "\n";
+		newickFile += calculateNewick(names, ht, nNodes -1);
+		newickFile += "\n\n"; 
+		// have save the newick in to a file
+	}
+	
+	newickToFile(newickFile);
+}
+
+string DTree::calculateNewick(unordered_map<int,string> names, SoaTree ht, int idRaiz ){ 
+	string  str_tmp,  str_float;
+
+	//str_tmp = "";
+   	//str_float = ""; // idRaiz = nNodes -1 , get the last element in the vector, that's the root
+	if ( ht.getlChild(idRaiz)  == NOCHILD) { // left child of the root // Não tem filhos // nz_f1 = filho da esquerda do no
+		if ((idRaiz) < 0 || (idRaiz) > (nNodes-1)) // num of nodes
+			printf("ERRO %d\n", (idRaiz));
+		else
+			str_tmp += names[idRaiz]; 
+		str_tmp += ":";
+		str_float += to_string(ht.getBranch(idRaiz)); 
+		str_tmp += str_float;
+		return str_tmp;
+	} else { // Has child 
+		str_tmp +="(";
+		str_tmp += calculateNewick(names, ht, ht.getlChild(idRaiz)); 
+		str_tmp += ",";
+		str_tmp +=  calculateNewick(names, ht, ht.getrChild(idRaiz)); 
+		str_tmp += ")";
+		str_tmp += names[idRaiz];
+		str_tmp +=":";
+		str_float += to_string( ht.getBranch(idRaiz)); 
+		str_tmp += str_float;
+
+		
+		return str_tmp;
+	}
+	
+}
+
+void DTree::newickToFile(string newick ){ 
+	
+	ofstream ofFile;
+	ofFile.open( "newNewick.tree" );
+	ofFile<<newick;
+	ofFile.close();
+
+	/* case if needs to append to an existent newick file
+	ifstream inFile;
+	ofstream ofFile;
+	string backup="", str="";
+
+	inFile.open( "newNewick.tree" );
+
+	if(!inFile){ // there's not the file in the folder
+
+		ofFile.open( "newNewick.tree" ); // create a new file if there's not already a newick file
+		ofFile<<newick;
+
+	}
+
+	else{ // there's a file and we gotta update it
+
+		while (std::getline(inFile, str))
+		{
+		  backup += str;
+		  backup.push_back('\n');
+		} 
+
+		backup += newick;
+		backup.push_back('\n');
+
+		ofFile.open("newNewick.tree"); // create a new file 
+		ofFile<<backup;
+
+		inFile.close();
+	}
+
+	ofFile.close();	
+	*/
+}
 
 void DTree::print(unordered_map<int,string> names){
 
@@ -877,9 +977,12 @@ int main(int argc, char *argv[]){
 	CHECK(cudaDeviceSynchronize());
 	STOP_TIMER(time_spent);
 	cout<<"\ntotal time spent to expand trees: "<<time_spent<<"s\n";	
-/*
-	replics.print(tree->getNames(),0);
-	replics.print(tree->getNames(),1);
+	
+
+	//replics.print(tree->getNames(),0);
+	replics.toNewick(tree->getNames());
+
+/*	replics.print(tree->getNames(),1);
 	replics.print(tree->getNames(),2);
 
 	START_TIMER();
