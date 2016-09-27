@@ -230,10 +230,12 @@ string DTree::calculateNewick(unordered_map<int,string> names, SoaTree ht, int i
 		str_tmp +=  calculateNewick(names, ht, ht.getrChild(idRaiz)); 
 		str_tmp += ")";
 		str_tmp += names[idRaiz];
-		str_tmp +=":";
-		str_float += to_string( ht.getBranch(idRaiz)); 
-		str_tmp += str_float;
 
+		if(nNodes -1 != idRaiz){ // if the element is not the root
+			str_tmp +=":";
+			str_float += to_string( ht.getBranch(idRaiz)); 
+			str_tmp += str_float;
+		}
 		
 		return str_tmp;
 	}
