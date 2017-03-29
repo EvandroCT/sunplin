@@ -1,6 +1,6 @@
 /*************************************************************************
 	
-	Copyright (C) 2016	Evandro Taquary, Thiago Santos
+	Copyright (C) 2016	Evandro Taquary, Thiago Santos, Wellington Martins
 	
 	This program is free software: you can redistribute it and/or modify s
     it under the terms of the GNU General Public License as published by
@@ -41,7 +41,6 @@ using namespace std;
 			end_time = tv.tv_sec * 1000000 + tv.tv_usec; \
 			time_spent = ((double)(end_time-start_time))/1000000; \
 		}
-
 #define CHECK(call) \
 		{ \
 			const cudaError_t error = call; \
@@ -68,6 +67,8 @@ typedef struct {
 
 #define NOCHILD USHRT_MAX		//16 bits
 #define NOPARENT USHRT_MAX/2	//15 bits
+
+double time_spent[7];
 
 class SoaTree {
 	private:
@@ -180,9 +181,9 @@ class DTree{
 		__host__ void print(unordered_map<int,string> names);
 		__host__ void print(unordered_map<int,string> names, int i);
 		__host__ void free(){CHECK(cudaFree(devData.getPtr()))}
-		__noinline__ __host__ void toNewick(unordered_map<int,string> names);
-		__noinline__ __host__ string calculateNewick(unordered_map<int,string> names,  SoaTree ht, int idRaiz);
-		__noinline__ __host__ void newickToFile(string newick);
+		__host__ void toNewick(unordered_map<int,string> names);
+		__host__ string calculateNewick(unordered_map<int,string> names,  SoaTree ht, int idRaiz);
+		__host__ void newickToFile(string newick);
 
 };
 
@@ -194,15 +195,14 @@ void DTree::toNewick(unordered_map<int,string> names){
 	SoaTree ht;
 	int indexThree;
 	string  newickFile="";
-	cout<<nTrees<<endl;
 	for(indexThree=0; indexThree<nTrees; indexThree++){ // total of threes
 		ht.setOffs(nNodes, h_replics+(treeSize*indexThree));// get the pointer set for a tree i
 		// Ainda precisa resetar as variaveis str para cada nova interação
-		newickFile += "#";
+		newickFile += "Tree ";
 		newickFile += to_string(indexThree +1);
 		newickFile += "\n";
 		newickFile += calculateNewick(names, ht, nNodes -1);
-		newickFile += "\n\n"; 
+		newickFile += ";\n\n"; 
 		// have save the newick in to a file
 	}
 	
@@ -242,46 +242,11 @@ string DTree::calculateNewick(unordered_map<int,string> names, SoaTree ht, int i
 	
 }
 
-void DTree::newickToFile(string newick ){ 
-	
+void DTree::newickToFile(string newick ){ 	
 	ofstream ofFile;
-	ofFile.open( "newNewick.tree" );
+	ofFile.open("versions.tree");
 	ofFile<<newick;
 	ofFile.close();
-
-	/* case if needs to append to an existent newick file
-	ifstream inFile;
-	ofstream ofFile;
-	string backup="", str="";
-
-	inFile.open( "newNewick.tree" );
-
-	if(!inFile){ // there's not the file in the folder
-
-		ofFile.open( "newNewick.tree" ); // create a new file if there's not already a newick file
-		ofFile<<newick;
-
-	}
-
-	else{ // there's a file and we gotta update it
-
-		while (std::getline(inFile, str))
-		{
-		  backup += str;
-		  backup.push_back('\n');
-		} 
-
-		backup += newick;
-		backup.push_back('\n');
-
-		ofFile.open("newNewick.tree"); // create a new file 
-		ofFile<<backup;
-
-		inFile.close();
-	}
-
-	ofFile.close();	
-	*/
 }
 
 void DTree::print(unordered_map<int,string> names){
@@ -416,7 +381,7 @@ HTree::HTree(int dev_id, string nw_fname, string pt_fname){
 	struct timeval tv;
 
 	void * d_tree;
-	double time_spent;
+	//double time_spent;
 	devId = dev_id;
 	nTrees=1;
 	CHECK(cudaSetDevice(devId));
@@ -434,19 +399,18 @@ HTree::HTree(int dev_id, string nw_fname, string pt_fname){
 	parseTree(fileLine,filePut);
 	newickf.close();
 	putf.close();
-	STOP_TIMER(time_spent);
-	cout<<"\ntotal time spent to parse the files: "<<time_spent<<"s\n";	
-
+	STOP_TIMER(time_spent[0]);
 	//make a copy of the tree on device side
 	START_TIMER();
 	CHECK(cudaMalloc(&d_tree, treeSize));
 	CHECK(cudaMemcpy(d_tree, hostData.getPtr(), treeSize, cudaMemcpyHostToDevice));	
-	STOP_TIMER(time_spent);
-	cout<<"\ntotal time spent to copy backbone tree to GPU: "<<time_spent<<"s\n";
+	STOP_TIMER(time_spent[1]);
 	base=d_tree;
 	devData.setOffs(nNodes, d_tree);
 }
 
+
+//compare argument tree to all the trees within object
 bool DTree::compareTo(HTree *h_tree){
 	if(treeSize != h_tree->getSize() || idxInsSpc != h_tree->getIdxInsSpc() || idxInsAnc != h_tree->getIdxInsAnc())
 		return false;
@@ -542,7 +506,7 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
     // fill new ancestors' names
     for(int i=0; i<getnInsSpc();i++)
     	setName("na#"+to_string(i+1),getIdxInsAnc()-i); //the new ancestors' insertions order is backward oriented
-  	cout << "FileLine: " << fileLine << endl << endl;	
+  	//cout << "FileLine: " << fileLine << endl << endl;	
 	for(int i=0;i<nNodes;i++){		
 		setParent(NOPARENT,i);
 		setlChild(NOCHILD,i);
@@ -767,6 +731,7 @@ void HTree::parseTree(string fileLine, vector<string> filePut) {
 		setInseq(getIdxInsSpc()+i,i);
 }
 
+//creates 'num_reps' replics of the tree holded by the object, inside GPU Global memory, and return a reference to them
 DTree& HTree::gpuRep(int num_reps) const{	
 	size_t rep_size = treeSize * num_reps;
 	void *d_replics;
@@ -782,13 +747,14 @@ DTree& HTree::gpuRep(int num_reps) const{
 	return *new DTree(nNodes,nInsSpc,idxInsSpc,idxInsAnc,num_reps,treeSize,d_replics);
 }
 
+//create all necessary seeds to massive GPU randomize
 __global__ void setup_kernel(long long seed, curandState_t* devStates, ushort N){
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	int i;
     for(i=idx;i<N;i+=gridDim.x*blockDim.x)
     	curand_init(seed, i, 0, &devStates[i]);
 }
-
+//trees' exapansions
 __global__ void insertion(DTree tree, curandState_t* devStates){
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	curandState state;
@@ -868,6 +834,7 @@ __host__ __device__ int column_index( int i, int M ){ // retorna o indice da col
     return 1 + (i - M * row + row*(row+1) / 2);
 }
 
+//generate the patristic distance matrixes to all the replics
 __global__ void patrix(DTree tree, float* d_matrix){
 
 		tree.setTreeIdx(blockIdx.x);
@@ -876,7 +843,7 @@ __global__ void patrix(DTree tree, float* d_matrix){
 		unsigned long long row_bmp, col_bmp; 
 		ushort row_len, col_len;
 		ushort N = tree.getnNodes();
-		ushort nleafs = (N-1)/2;
+		ushort nleafs = (N+1)/2;
 		uint msize = nleafs*(nleafs-1)/2;
 
 		extern __shared__ ushort s[];
@@ -885,7 +852,9 @@ __global__ void patrix(DTree tree, float* d_matrix){
 		ushort *lchild = parent+N;
 		ushort *rchild = lchild+N;
 
-		 uint i;
+		uint i;
+
+		//separated loops to favor coalesced access
 		for(i=idx;i<N;i+=blockDim.x)
 				parent[i] = tree.getParent(i);
 		for(i=idx;i<N;i+=blockDim.x)
@@ -914,56 +883,50 @@ __global__ void patrix(DTree tree, float* d_matrix){
 				col_bmp|=tree.getSide(taxon);
 			}
 			taxon=tree.getnNodes()-1; 	//start with the root
-			if((row_bmp&1)==(col_bmp&1)){	//if the LCA isn't the root
-
-				//printf("\nrow=%d, col=%d\n",row,col);
-
-				//printf("\nrow_bmp=%llu, col_bmp=%llu\n",row_bmp, col_bmp);
-
+			if((row_bmp&1)==(col_bmp&1)){	//if the LCA isn't the root				
 				do{
 					taxon = row_bmp&1 ? lchild[taxon] : rchild[taxon]; // either row_bmp or col_bmp (same)
-					//printf("taxon: %d\n",taxon);
 				 	row_bmp>>=1;
 				 	col_bmp>>=1;
 				 }while((row_bmp&1)==(col_bmp&1));
 			}
-			d_matrix[blockIdx.x*msize+i] = tree.getdRoot(row)+tree.getdRoot(col)-2*tree.getdRoot(taxon);
+			d_matrix[blockIdx.x*msize+i] = 2*(tree.getdRoot(row)-tree.getdRoot(taxon));
 	}
 }
 
 int main(int argc, char *argv[]){	
 
 	if(argc < 2 || argc >4){
-		cout << "Usage: " << argv[0] << " #replications [newick putlist]" << endl;
+		cout << "Usage: " << argv[0] << " #replications [newick_file putlist_file]" << endl;
 		exit(EXIT_FAILURE);
 	}
 	
 	long long start_time, end_time;
 	struct timeval tv;
+	char op;
 
-	int gpu=0;
-	double time_spent;
+	int gpu=0;	
 	int num_reps = atoi(argv[1]);	
 	HTree *tree = argc>2 ? new HTree(gpu,argv[2],argv[3]) : new HTree(gpu);
 	
 	CHECK(cudaSetDevice(gpu));
 	START_TIMER();
 	DTree replics = tree->gpuRep(num_reps);
-	STOP_TIMER(time_spent);
-	cout<<"\ntotal time spent to replicate trees: "<<time_spent<<"s\n";	
+	STOP_TIMER(time_spent[2]);	
 
-	cout << "nNodes: " << tree->getnNodes() << endl;
-	cout << "nInsSpc: " << tree->getnInsSpc() << endl;
-	cout << "idxInsSpc: " << tree->getIdxInsSpc() << endl;
-	cout << "idxInsAnc: " << tree->getIdxInsAnc() << endl << endl;
-/*	
+	cout << "\n# of species of original tree: " << tree->getIdxInsSpc() << endl;
+	cout << "# of PUTs to be inserted: " << tree->getnInsSpc() << endl;
+	cout << "# of species after insertion: " << tree->getIdxInsSpc() + tree->getnInsSpc() << endl;
+	cout << "# of nodes (including internals): " << tree->getnNodes()-1 << endl << endl;
+
+	/*
 	if(replics.compareTo(tree))
 		cout << "Data does match!" << endl;
 	else
 		cout << "Data doesn't match" << endl;
-*/
-	curandState_t *devStates;
+	*/
 
+	curandState_t *devStates;
 	cudaDeviceProp device;
 	CHECK(cudaGetDeviceProperties(&device,gpu));
 	
@@ -977,34 +940,39 @@ int main(int argc, char *argv[]){
 	CHECK(cudaDeviceSynchronize());
 	insertion<<<grid,block>>>(replics,devStates);	
 	CHECK(cudaDeviceSynchronize());
-	STOP_TIMER(time_spent);
-	cout<<"\ntotal time spent to expand trees: "<<time_spent<<"s\n";	
+	STOP_TIMER(time_spent[3]);
 	
-
-	//replics.print(tree->getNames(),0);
-	replics.toNewick(tree->getNames());
-
-/*	replics.print(tree->getNames(),1);
-	replics.print(tree->getNames(),2);
-
 	START_TIMER();
+	ushort nleafs = (replics.getnNodes()+1)/2;
+	uint msize = nleafs*(nleafs-1)/2;
+
 	float *d_matrix;
-	ushort nleafs = (replics.getnNodes()-1)/2;
-	ushort msize = nleafs*(nleafs-1)/2;
 	CHECK(cudaMalloc((void**)&d_matrix, sizeof(float)*msize*num_reps));
 	patrix<<<num_reps,256,replics.getnNodes()*(sizeof(ushort)*3)>>>(replics, d_matrix);
 	CHECK(cudaDeviceSynchronize());
-	STOP_TIMER(time_spent);
-	cout<<"\ntotal time spent to generate patrixes: "<<time_spent<<"s\n";	
-
-	//replics.free();
-
+	STOP_TIMER(time_spent[4]);	
+	
 	START_TIMER();
 	float *h_matrix = (float*)malloc(sizeof(float)*msize*num_reps);
 	CHECK(cudaMemcpy(h_matrix, d_matrix, sizeof(float)*msize*num_reps, cudaMemcpyDeviceToHost));
-	STOP_TIMER(time_spent);
-	cout<<"\ntotal time spent to copy patrixes to CPU: "<<time_spent<<"s\n";	
-*/
-	CHECK(cudaDeviceReset());
+	STOP_TIMER(time_spent[5]);
+
+	cout<<"\ntotal time spent to parse the files: "<<time_spent[0]<<"s";
+	cout<<"\ntotal time spent to copy backbone tree to GPU: "<<time_spent[1]<<"s";
+	cout<<"\ntotal time spent to replicate trees: "<<time_spent[2]<<"s";
+	cout<<"\ntotal time spent to expand trees: "<<time_spent[3]<<"s";
+	cout<<"\ntotal time spent to generate patrixes: "<<time_spent[4]<<"s";
+	cout<<"\ntotal time spent to copy patrixes back to host: "<<time_spent[5]<<"s\n\n";
+
+	cout<<"\nDo you want to store the generated trees into a file (it may take a long time)? (Y/N): "; cin >> op;
+
+	if(op=='y' || op=='Y'){
+		START_TIMER();
+		replics.toNewick(tree->getNames()); 
+		STOP_TIMER(time_spent[6]);
+		cout<<"\ntotal time spent to create output file (versions.tree): "<<time_spent[6]<<"s\n\n";
+	}
+
+	CHECK(cudaDeviceReset());	
 	exit(EXIT_SUCCESS);	
 }
