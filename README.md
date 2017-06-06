@@ -1,22 +1,22 @@
 ## Synopsis
 
-This software aims to provide massive parallel processing to generate multiple variants of a tree with phylogenetic uncertainty and calculate a patristic distance matrix for each version generated. This is done using CUDA, wich enable the use of nVidia GPU to speedup these operations wich are inherently time-consuming.
+This software aims to provide massive parallel processing to generate multiple variants of a tree with phylogenetic uncertainty and calculate a patristic distance matrix for each version generated. This is done using CUDA, wich enable the use of NVIDIA GPU to speedup these operations wich are inherently time-consuming.
 
 ## Installation
 
-Before installing this software, the **Cuda Toolkit  (at least 7.5)** must be already installed on your system. If haven't yet, instructions can be found [here]( http://docs.nvidia.com/cuda/index.html).
+Before installing this software, the **Cuda Toolkit  (at least 7.5)** must be already installed on your system. If haven't yet, instructions can be found [here](http://docs.NVIDIA.com/cuda/index.html).
 
-At the root directory of the source repository, run the following command:
+At the root of the source directory, run the following command:
 
->$ nvcc -w -arch=sm_35 --std=c++11 sunplin.cu modcpy.cu -o sunplin
+>$ make
 
 If no errors occur, an executable file called 'sunplin' should be created.
 
 ## Usage Example
 
-**Important: It's necessary to have a functioning nVidia GPU with at least a Compute Capability 3.0. You can find out this information about your device [here](https://developer.nvidia.com/cuda-gpus).**
+**Important: It's necessary to have a functioning NVIDIA GPU with at least a Compute Capability 3.0. You can find out this information about your device [here](https://developer.NVIDIA.com/cuda-gpus).**
 
-Supose you have a newick file called 'newick.tree' containing a phylogenetic tree with uncertainty (with absent species); also,  another file called 'put.list' wich has in each line a PUT (Phylogenetic Uncertainty Taxon) followed by a MDCC (Most Derived Consensus Clade),  separated by space.
+Supose you have a newick file called 'newick.tree' at the same directory as the binary file created at compilation containing a phylogenetic tree with uncertainty (with absent species); also,  another file called 'put.list' wich has in each line a PUT (Phylogenetic Uncertainty Taxon) followed by a MDCC (Most Derived Consensus Clade),  separated by space.
 
 The following command will generate 1000 diferent versions of the original tree (newick.tree) each one ramdomly expanded with the taxa contained in each line within the list of PUTs (put.list):
 
@@ -27,7 +27,7 @@ By running the following command you will be able to pick up nonstandard input f
 
 >$ ./sunplin 1000 /path/to/newick\_file /path/to/list\_of\_puts\_file
 
-The two commands above will prompt a message asking whether you wish to store the generated trees into a standard file called 'versions.tree'. Be aware that this operation could take several time.
+Either commands above will prompt a message asking whether you wish to store the generated trees into a standard file called 'versions.tree'. Be aware that this operation could take several time.
 
 ## Motivation
 
@@ -37,9 +37,9 @@ study evolutionary processes. However, most phylogenetic trees are incomplete wi
 
 ## Tests
 
-Using a nVidia TitanX graphics card and the standard example input files provided by this repository, we were capable of seamlessly running a simulation with up to 3000 replications. 
+Using a NVIDIA GeForce GTX TITAN X graphics card and the standard example input files provided by this repository, we were capable of seamlessly running a simulation with up to 3000 replications. 
 
-This software has been conceived with academic purpose, thus, tests was made within a very restricted range of environments, therefore, more tests must be done. All the comunity is welcome to do your own tests and provide us your feedback.
+This software has been conceived with academic purpose, thus, tests was made within a very restricted range of environments, therefore, more tests have be done. All the comunity is welcome to do your own tests and provide us your feedback.
 
 ## Contributors
 

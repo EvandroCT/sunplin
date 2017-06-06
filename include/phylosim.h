@@ -1,6 +1,6 @@
 /*************************************************************************
 	
-	Copyright (C) 2016	Evandro Taquary, Mateus Freitas
+	Copyright (C) 2017	Evandro Taquary
 	
 	This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -17,15 +17,19 @@
 	
 *************************************************************************/
 
-/* GPU modular copy */
-__global__ void modcpy(void *destination, void *source, size_t destination_size, size_t source_size){
+#ifndef _PHYLOSIM_H
+#define _PHYLOSIM_H
 
-	int idx = blockIdx.x * blockDim.x + threadIdx.x; 
-	int pos;
- 
-	int ds = destination_size/sizeof(int4), ss = source_size/sizeof(int4);
-	for(int i = idx; i < ds; i += gridDim.x * blockDim.x){
-		pos = i % ss;
-		reinterpret_cast<int4*>(destination)[i] = reinterpret_cast<int4*>(source)[pos];  
-	}
-}
+#include <curand_kernel.h>
+#include "dtree.h"
+
+//create all necessary seeds to massive GPU randomize
+__global__ void setup_kernel(long long seed, curandState_t* devStates, ushort N);
+
+//trees' exapansions
+__global__ void insertion(DTree tree, curandState_t* devStates);
+
+//generate the patristic distance matrices to all the replics
+__global__ void patrix(DTree tree, float* d_matrix);
+
+#endif
