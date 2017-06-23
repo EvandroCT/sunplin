@@ -2,45 +2,73 @@
 CC=nvcc
 
 #headers location
-INC=include/
+INCDIR=include/
 
-#sources location
-SRC=src/
+#source location
+SRCDIR=src/
 
-#created objects location
-BUILD=build/
+#R package source location
+PKGDIR=$(SRCDIR)rpkg/
 
-#libraries location
-LIB=lib/
+#builded libraries location
+LIBDIR=lib/
 
-#list of objects to be created. TODO: automate process
-OBJS=sunplin.o dtree.o htree.o phylosim.o cudutils.o
+#required R includes location
+RINC=$(shell R CMD config --cppflags)
 
-#-dc directive allows device code to be linked
-CFLAGS=-w -std=c++11 -dc -I $(INC)
+#source extension
+SRCEXT=cu
 
-#linker flags.
+#standalone app source files
+STDSOURCES=$(shell ls $(SRCDIR)*.$(SRCEXT))
+#$(info $$var is [${STDSOURCES}])
+#R package source files
+PKGSOURCES=$(shell ls $(PKGDIR)*.$(SRCEXT))
+
+#builded objects location
+BUILDIR=build/
+
+#list of builded objects
+OBJS=$(patsubst $(SRCDIR)%,$(BUILDIR)%,$(STDSOURCES:.$(SRCEXT)=.o))
+
+#list of headers
+INCLUDES=$(shell ls $(INCDIR)*)	
+
+#standalone app target
+STDTARGET=sunplin
+
+#R package target
+PKGTARGET=$(LIBDIR)librsunplin.so
+
+#compiler flags (dc flag allows device code to be linked)
+CFLAGS=-arch=sm_35 -std=c++11 -Xcompiler -fPIC -w -I $(INCDIR) -dc
+
+#flags to generate R's loadable shared object (rdc flag allows device code to be linked)
+SOFLAGS=-arch=sm_35 -std=c++11 -Xcompiler -fPIC -w -I $(INCDIR) -shared $(RINC) -rdc=true
+
+#linker flags
 LDFLAGS=-arch=sm_35
 
-all: sunplin
+all: $(STDTARGET) $(PKGTARGET)
+
+rpackage: rpkg
+
+rpkg: $(PKGTARGET)
 	
-sunplin: $(addprefix $(BUILD), $(OBJS))
-	$(CC) $(LDFLAGS) $^ -o sunplin
+$(STDTARGET): $(OBJS)
+	@echo "Linking..."
+	$(CC) $(LDFLAGS) $(OBJS) -o $(STDTARGET)
 
-$(BUILD)sunplin.o: $(SRC)sunplin.cu $(INC)htree.h $(INC)cudutils.h $(INC)phylosim.h
-	$(CC) $(CFLAGS) $(SRC)sunplin.cu -o $(BUILD)sunplin.o
+$(PKGTARGET): $(OBJS) $(PKGSOURCES) $(INCLUDES)
+	@echo "Creating shared object..."
+	@mkdir -p $(LIBDIR);
+	$(CC) $(SOFLAGS) $(PKGSOURCES) $(OBJS) -o $(PKGTARGET)
 
-$(BUILD)dtree.o: $(SRC)dtree.cu $(INC)soatree.h
-	$(CC) $(CFLAGS) $(SRC)dtree.cu -o $(BUILD)dtree.o
+$(BUILDIR)%.o: $(SRCDIR)%.$(SRCEXT) $(INCLUDES)
+	@echo "Compiling..."
+	@mkdir -p $(BUILDIR);
+	$(CC) $(CFLAGS) $< -o $@
 
-$(BUILD)htree.o: $(SRC)htree.cu $(INC)htree.h $(INC)cudutils.h
-	$(CC) $(CFLAGS) $(SRC)htree.cu -o $(BUILD)htree.o
-
-$(BUILD)phylosim.o: $(SRC)phylosim.cu $(INC)phylosim.h $(INC)cudutils.h
-	$(CC) $(CFLAGS) $(SRC)phylosim.cu -o $(BUILD)phylosim.o
-
-$(BUILD)cudutils.o: $(SRC)cudutils.cu
-	$(CC) $(CFLAGS) $(SRC)cudutils.cu -o $(BUILD)cudutils.o
-
-clean: 
-	rm $(BUILD)*.o sunplin
+clean:
+	@echo "Cleaning... "
+	@rm -Rf $(BUILDIR) $(LIBDIR) sunplin

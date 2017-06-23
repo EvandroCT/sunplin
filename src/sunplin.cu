@@ -1,6 +1,6 @@
 /*************************************************************************
 	
-	Copyright (C) 2016	Evandro Taquary, Thiago Santos, Wellington Martins
+	Copyright (C) 2017	Evandro Taquary
 	
 	This program is free software: you can redistribute it and/or modify s
     it under the terms of the GNU General Public License as published by
@@ -78,7 +78,7 @@ int main(int argc, char *argv[]){
 
 	float *d_matrix;
 	CHECK(cudaMalloc((void**)&d_matrix, sizeof(float)*msize*num_reps));
-	patrix<<<num_reps,256,replics.getnNodes()*(sizeof(ushort)*3)>>>(replics, d_matrix);
+	patrices<<<num_reps,256,replics.getnNodes()*(sizeof(ushort)*3)>>>(replics, d_matrix);
 	CHECK(cudaDeviceSynchronize());
 	STOP_TIMER(time_spent[4]);	
 	
@@ -94,6 +94,7 @@ int main(int argc, char *argv[]){
 	cout<<"\ntotal time spent to generate patrices: "<<time_spent[4]<<"s";
 	cout<<"\ntotal time spent to copy patrices back to host: "<<time_spent[5]<<"s\n\n";
 
+/*
 	cout<<"\nDo you want to store the generated trees into a file (it may take a long time)? (Y/N): "; cin >> op;
 
 	if(op=='y' || op=='Y'){
@@ -102,6 +103,9 @@ int main(int argc, char *argv[]){
 		STOP_TIMER(time_spent[6]);
 		cout<<"\ntotal time spent to create output file (versions.tree): "<<time_spent[6]<<"s\n\n";
 	}
+*/
+
+	replics.print(tree->getNames());
 
 	CHECK(cudaDeviceReset());	
 	exit(EXIT_SUCCESS);	

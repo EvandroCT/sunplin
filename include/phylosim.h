@@ -30,6 +30,6 @@ __global__ void setup_kernel(long long seed, curandState_t* devStates, ushort N)
 __global__ void insertion(DTree tree, curandState_t* devStates);
 
 //generate the patristic distance matrices to all the replics
-__global__ void patrix(DTree tree, float* d_matrix);
+__global__ void patrices(DTree tree, float* d_matrix);
 
 #endif

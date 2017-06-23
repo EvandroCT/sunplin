@@ -25,7 +25,7 @@
 
 using namespace std;
 
-void DTree::toNewick(unordered_map<int,string> names){ 
+void DTree::toNewick(unordered_map<int,string> names, string fname = "versions.tree"){ 
 
 	size_t rep_size = treeSize*nTrees;	
 	void* h_replics = malloc(rep_size);
@@ -44,7 +44,30 @@ void DTree::toNewick(unordered_map<int,string> names){
 		// have save the newick in to a file
 	}
 	
-	newickToFile(newickFile);
+	printToFile(newickFile, fname);
+}
+
+void DTree::toCSV(float *matrices,  string fname = "matrices.csv"){ 
+
+	string  matrix="";
+	ushort nleafs = (getnNodes()+1)/2;
+	uint msize = nleafs*(nleafs-1)/2;	
+	int j, m_idx=0;
+	for(int k=0; k<getnTrees(); k++)
+	{
+		matrix += "#Tree "+to_string(k+1)+"\n";
+		for(int i=0; i<nleafs; i++){
+			for(j=0; j<=i; j++){
+				matrix += "0,";
+			}
+			for(; j<nleafs; j++){
+				matrix += to_string(matrices[m_idx++])+",";
+			}
+			matrix.pop_back();	//erease last comma
+			matrix += "\n";
+		}
+	}
+	printToFile(matrix,fname);	
 }
 
 string DTree::calculateNewick(unordered_map<int,string> names, SoaTree ht, int idRaiz ){ 
@@ -80,10 +103,10 @@ string DTree::calculateNewick(unordered_map<int,string> names, SoaTree ht, int i
 	
 }
 
-void DTree::newickToFile(string newick ){ 	
+void DTree::printToFile(string content, string fname){ 	
 	ofstream ofFile;
-	ofFile.open("versions.tree");
-	ofFile<<newick;
+	ofFile.open(fname);
+	ofFile<<content;
 	ofFile.close();
 }
 

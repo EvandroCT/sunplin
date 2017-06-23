@@ -84,9 +84,10 @@ class DTree{
 		__host__ void print(unordered_map<int,string> names);
 		__host__ void print(unordered_map<int,string> names, int i);
 		__host__ void free();
-		__host__ void toNewick(unordered_map<int,string> names);
+		__host__ void toNewick(unordered_map<int,string> names, string fname);
 		__host__ string calculateNewick(unordered_map<int,string> names,  SoaTree ht, int idRaiz);
-		__host__ void newickToFile(string newick);
+		__host__ void printToFile(string content, string fname);
+		__host__ void toCSV(float *matrices, string fname);
 
 };
 
